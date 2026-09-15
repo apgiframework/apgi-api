@@ -65,7 +65,7 @@ resource "google_cloud_run_v2_service" "apgi_core" {
 
       startup_probe {
         http_get {
-          path = "/health"
+          path = "/health/ready"
         }
         initial_delay_seconds = 5
         period_seconds        = 5
@@ -74,7 +74,7 @@ resource "google_cloud_run_v2_service" "apgi_core" {
 
       liveness_probe {
         http_get {
-          path = "/health"
+          path = "/health/live"
         }
         period_seconds = 30
       }
