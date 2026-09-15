@@ -51,13 +51,13 @@ spec:
               key: celery-result-backend
         livenessProbe:
           httpGet:
-            path: /health
+            path: /health/live
             port: 8000
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /health
+            path: /health/ready
             port: 8000
           initialDelaySeconds: 5
           periodSeconds: 5

@@ -18,12 +18,12 @@ resource "google_monitoring_notification_channel" "email" {
 resource "google_monitoring_uptime_check_config" "health" {
   count        = var.api_domain != null ? 1 : 0
   project      = var.project_id
-  display_name = "apgi-core /health (${var.environment})"
+  display_name = "apgi-core /health/ready (${var.environment})"
   timeout      = "10s"
   period       = "60s"
 
   http_check {
-    path         = "/health"
+    path         = "/health/ready"
     port         = 443
     use_ssl      = true
     validate_ssl = true
