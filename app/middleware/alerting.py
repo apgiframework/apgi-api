@@ -188,7 +188,9 @@ class SlackNotificationChannel(NotificationChannel):
                     for key, value in alert.metadata.items()
                 ]
                 attachments = slack_payload.get("attachments")
-                if attachments and isinstance(attachments, list) and len(attachments) > 0:  # pragma: no branch
+                if (
+                    attachments and isinstance(attachments, list) and len(attachments) > 0
+                ):  # pragma: no branch
                     attachments[0]["fields"].extend(metadata_fields)
 
             async with httpx.AsyncClient() as client:

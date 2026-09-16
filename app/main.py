@@ -173,9 +173,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Initialize Redis client
     try:
-        redis_client = redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)  # type: ignore[no-untyped-call]
+        redis_client = redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
         if redis_client:
-            await redis_client.ping()  # type: ignore[misc]
+            await redis_client.ping()
             logger.info("Redis client initialized", component="redis", url=settings.redis_url)
             app.state.redis_available = True
 
@@ -278,9 +278,13 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
 - JSON is the primary data exchange format
 - Binary data (exports) uses appropriate MIME types
 """,
-        docs_url="/docs" if settings.environment in ["development", "staging"] else None,
-        redoc_url="/redoc" if settings.environment in ["development", "staging"] else None,
-        openapi_url="/openapi.json" if settings.environment in ["development", "staging"] else None,
+        docs_url="/docs" if settings.environment in ["development", "staging", "test"] else None,
+        redoc_url=(
+            "/redoc" if settings.environment in ["development", "staging", "test"] else None
+        ),
+        openapi_url=(
+            "/openapi.json" if settings.environment in ["development", "staging", "test"] else None
+        ),
         lifespan=lifespan,
     )
     app.state.test_mode = test_mode

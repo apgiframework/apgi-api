@@ -129,12 +129,13 @@ class TestTaskExecutor:
         )
         mock_db.query.return_value.filter.return_value.first.return_value = MagicMock()
 
-        with patch(
-            "app.services.task_execution.task_executor.get_db_context"
-        ) as mock_ctx:
+        with patch("app.services.task_execution.task_executor.get_db_context") as mock_ctx:
             mock_ctx.return_value.__enter__.return_value = mock_db
             with patch.object(
-                task_executor.task_submitter, "submit_task", new_callable=AsyncMock, return_value="task-123"
+                task_executor.task_submitter,
+                "submit_task",
+                new_callable=AsyncMock,
+                return_value="task-123",
             ):
                 with patch.object(task_executor.dependency_manager, "has_cycle", return_value=True):
                     with pytest.raises(ValueError, match="Task dependency cycle detected"):
@@ -156,18 +157,23 @@ class TestTaskExecutor:
             mock_session
         )
 
-        with patch(
-            "app.services.task_execution.task_executor.get_db_context"
-        ) as mock_ctx:
+        with patch("app.services.task_execution.task_executor.get_db_context") as mock_ctx:
             mock_ctx.return_value.__enter__.return_value = mock_db
             with patch.object(
-                task_executor.task_submitter, "submit_task", new_callable=AsyncMock, return_value="task-456"
+                task_executor.task_submitter,
+                "submit_task",
+                new_callable=AsyncMock,
+                return_value="task-456",
             ):
-                with patch.object(task_executor.dependency_manager, "has_cycle", return_value=False):
+                with patch.object(
+                    task_executor.dependency_manager, "has_cycle", return_value=False
+                ):
                     with patch.object(
                         task_executor.dependency_manager, "can_start_task", return_value=True
                     ):
-                        with patch.object(task_executor.strategy_registry, "get", return_value=None):
+                        with patch.object(
+                            task_executor.strategy_registry, "get", return_value=None
+                        ):
                             with patch.object(
                                 task_executor.task_submitter,
                                 "start_task_immediately",

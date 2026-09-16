@@ -245,7 +245,9 @@ class AuthManager:
 
             # Check if token has been revoked (only for access tokens with JTI)
             if payload.jti and self.redis and expected_type == "access":  # pragma: no branch
-                if await self.redis.exists(f"revoked_access_tokens:{payload.jti}"):  # pragma: no branch
+                if await self.redis.exists(
+                    f"revoked_access_tokens:{payload.jti}"
+                ):  # pragma: no branch
                     raise InvalidTokenError("Token has been revoked")
 
             return payload

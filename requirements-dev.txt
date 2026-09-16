@@ -8,10 +8,11 @@ pytest-cov>=4.1.0
 hypothesis>=6.92.1
 locust>=2.20.0
 black>=24.0.0
-ruff>=0.1.0
+flake8>=7.0.0
 mypy>=1.9.0
 isort>=5.13.0
 types-psutil>=5.9.0
+types-PyYAML>=6.0.0
 types-psycopg2>=2.9.0
 
 # Browser automation for screenshots

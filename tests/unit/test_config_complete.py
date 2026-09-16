@@ -402,6 +402,8 @@ class TestSettingsDefaultLogLevel:
             "STRIPE_WEBHOOK_SECRET": "whsec_valid_secret",
             "SMTP_SERVER": "smtp.example.com",
             "LOG_LEVEL": "WARNING",
+            "PII_ENCRYPTION_KEY": "04NwSXgR5tHZ6YBR95EMLJwV_V2SUyBbsbCESUrIdrE=",
+            "AUDIT_SIGNING_KEY": "prod_audit_signing_key_with_enough_length_012345",
         },
         clear=True,
     )

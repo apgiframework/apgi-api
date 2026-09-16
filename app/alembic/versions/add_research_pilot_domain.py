@@ -222,7 +222,9 @@ def _enable_rls(op) -> None:  # type: ignore[no-untyped-def]
     )
 
     for table in _RLS_TABLES_WITH_PARTICIPANT_ID:
-        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+        # table names come from the fixed, hardcoded _RLS_TABLES_WITH_PARTICIPANT_ID
+        # list above, never from user input, so f-string interpolation here is safe.
+        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")  # nosec: B608
         op.execute(
             f"""
             CREATE POLICY {table}_owner_or_staff ON {table}
@@ -233,7 +235,7 @@ def _enable_rls(op) -> None:  # type: ignore[no-untyped-def]
                     WHERE user_id = NULLIF(current_setting('app.current_user_id', true), '')
                 )
             )
-            """
+            """  # nosec: B608
         )
 
     # trial_events has no direct participant_id column — join through

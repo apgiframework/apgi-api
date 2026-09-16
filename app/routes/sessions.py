@@ -335,7 +335,9 @@ async def create_session(
     cached_response = await check_idempotency_key(req, current_user.user_id, redis_client)
     if cached_response:  # pragma: no branch
         # Convert cached datetime string back to datetime object, preserving timezone
-        if "created_at" in cached_response and isinstance(cached_response["created_at"], str):  # pragma: no branch
+        if "created_at" in cached_response and isinstance(
+            cached_response["created_at"], str
+        ):  # pragma: no branch
             cached_response["created_at"] = datetime.fromisoformat(cached_response["created_at"])
         return SessionCreateResponse(**cached_response)
 

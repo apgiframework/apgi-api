@@ -24,13 +24,11 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-import socket
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
-
 
 # ===========================================================================
 # app/models/schemas.py - Remaining validator gaps
@@ -309,9 +307,7 @@ class TestTaskExecutionExecutorGaps:
             MagicMock()
         )
 
-        with patch(
-            "app.services.task_execution.task_executor.get_db_context"
-        ) as mock_ctx:
+        with patch("app.services.task_execution.task_executor.get_db_context") as mock_ctx:
             mock_ctx.return_value.__enter__.return_value = mock_db
             with patch.object(
                 executor.task_submitter, "submit_task", new_callable=AsyncMock, return_value="t1"
@@ -335,9 +331,7 @@ class TestTaskExecutionExecutorGaps:
         # Task not found when deleting
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        with patch(
-            "app.services.task_execution.task_executor.get_db_context"
-        ) as mock_ctx:
+        with patch("app.services.task_execution.task_executor.get_db_context") as mock_ctx:
             mock_ctx.return_value.__enter__.return_value = mock_db
             with patch.object(
                 executor.task_submitter, "submit_task", new_callable=AsyncMock, return_value="t1"
@@ -363,16 +357,16 @@ class TestTaskExecutionExecutorGaps:
 
         mock_task = MockTask()
         mock_db = MagicMock()
-        mock_db.query.return_value.join.return_value.filter.return_value.filter.return_value.first.return_value = mock_task
+        mock_db.query.return_value.join.return_value.filter.return_value.filter.return_value.first.return_value = (
+            mock_task
+        )
 
         mock_async_result = MagicMock()
         mock_async_result.state = "FAILURE"
         mock_async_result.result = Exception("celery failed")
         mock_async_result.info = None
 
-        with patch(
-            "app.services.task_execution.task_executor.get_db_context"
-        ) as mock_ctx:
+        with patch("app.services.task_execution.task_executor.get_db_context") as mock_ctx:
             mock_ctx.return_value.__enter__.return_value = mock_db
             with patch(
                 "app.services.task_execution.task_executor.AsyncResult",
@@ -400,16 +394,16 @@ class TestTaskExecutionExecutorGaps:
 
         mock_task = MockTask()
         mock_db = MagicMock()
-        mock_db.query.return_value.join.return_value.filter.return_value.filter.return_value.first.return_value = mock_task
+        mock_db.query.return_value.join.return_value.filter.return_value.filter.return_value.first.return_value = (
+            mock_task
+        )
 
         mock_async_result = MagicMock()
         mock_async_result.state = "FAILURE"
         mock_async_result.result = None
         mock_async_result.info = None
 
-        with patch(
-            "app.services.task_execution.task_executor.get_db_context"
-        ) as mock_ctx:
+        with patch("app.services.task_execution.task_executor.get_db_context") as mock_ctx:
             mock_ctx.return_value.__enter__.return_value = mock_db
             with patch(
                 "app.services.task_execution.task_executor.AsyncResult",
@@ -437,16 +431,16 @@ class TestTaskExecutionExecutorGaps:
 
         mock_task = MockTask()
         mock_db = MagicMock()
-        mock_db.query.return_value.join.return_value.filter.return_value.filter.return_value.first.return_value = mock_task
+        mock_db.query.return_value.join.return_value.filter.return_value.filter.return_value.first.return_value = (
+            mock_task
+        )
 
         mock_async_result = MagicMock()
         mock_async_result.state = "PENDING"
         mock_async_result.result = None
         mock_async_result.info = None
 
-        with patch(
-            "app.services.task_execution.task_executor.get_db_context"
-        ) as mock_ctx:
+        with patch("app.services.task_execution.task_executor.get_db_context") as mock_ctx:
             mock_ctx.return_value.__enter__.return_value = mock_db
             with patch(
                 "app.services.task_execution.task_executor.AsyncResult",
@@ -483,9 +477,7 @@ class TestDependencyManagerGaps:
         mock_prereq.status = TaskStatus.RUNNING.value  # Not COMPLETED
         mock_db.query.return_value.filter.return_value.first.return_value = mock_prereq
 
-        with patch(
-            "app.services.task_execution.dependency_manager.get_db_context"
-        ) as mock_ctx:
+        with patch("app.services.task_execution.dependency_manager.get_db_context") as mock_ctx:
             mock_ctx.return_value.__enter__.return_value = mock_db
             result = dm.can_start_task("task1")
             assert result is False
@@ -508,6 +500,7 @@ class TestDependencyManagerGaps:
                     raise RuntimeError("simulated outer error")
                 except Exception as e:
                     import logging
+
                     logging.getLogger(__name__).error(f"Error: {e}")
                     return []
 
@@ -730,7 +723,9 @@ class TestSessionManagerGaps:
         import asyncio
 
         async def run():
-            return await manager.list_sessions(user_id="user1", state="running", page=1, page_size=10)
+            return await manager.list_sessions(
+                user_id="user1", state="running", page=1, page_size=10
+            )
 
         # This should work without raising
         try:
@@ -798,9 +793,7 @@ class TestUserManagementGaps:
                 with patch.object(AuthManager, "hash_password", return_value="hashed"):
                     with patch.object(service, "_validate_password_complexity"):
                         try:
-                            service.create_user(
-                                "newuser", "new@example.com", "SecurePass1!"
-                            )
+                            service.create_user("newuser", "new@example.com", "SecurePass1!")
                         except Exception:
                             pass
                         # Line 116 should be hit
@@ -885,12 +878,8 @@ class TestProfilingServiceGaps:
         # Add some metrics to trigger the aggregation paths
         try:
             # Call methods that hit the uncovered lines
-            service.record_request(
-                path="/test", method="GET", status_code=200, duration_ms=100.0
-            )
-            service.record_request(
-                path="/test", method="GET", status_code=500, duration_ms=200.0
-            )
+            service.record_request(path="/test", method="GET", status_code=200, duration_ms=100.0)
+            service.record_request(path="/test", method="GET", status_code=500, duration_ms=200.0)
             result = service.get_performance_summary()
             assert result is not None
         except Exception:
@@ -936,9 +925,9 @@ class TestDatabaseConnectionGaps:
 
     def test_get_async_db_context(self) -> None:
         """Test async database context manager (lines 220-221)."""
-        from app.database.connection import get_async_db_context
-
         import asyncio
+
+        from app.database.connection import get_async_db_context
 
         async def run():
             async with get_async_db_context() as db:
@@ -994,7 +983,11 @@ class TestDbProfilingGaps:
         from starlette.requests import Request
         from starlette.responses import Response
 
-        from app.middleware.db_profiling import DBProfilingMiddleware, record_cache_hit, record_cache_miss
+        from app.middleware.db_profiling import (
+            DBProfilingMiddleware,
+            record_cache_hit,
+            record_cache_miss,
+        )
 
         mock_app = AsyncMock()
         middleware = DBProfilingMiddleware(mock_app)
@@ -1162,7 +1155,9 @@ class TestSecurityValidationFieldTypes:
 
     def _get_middleware(self) -> "object":
         from unittest.mock import MagicMock
+
         from app.middleware.security_validation import SecurityValidationMiddleware
+
         return SecurityValidationMiddleware(MagicMock())
 
     def test_string_field_non_string_value(self) -> None:
@@ -1277,6 +1272,7 @@ class TestSchemasParameterValidationBranches:
     def test_api_key_valid_expires_within_2_years(self) -> None:
         """Create APIKeyCreateRequest with valid expiry → branch 1758->1768 False path."""
         from datetime import datetime, timedelta, timezone
+
         from app.models.schemas import APIKeyCreateRequest
 
         future_date = datetime.now(timezone.utc) + timedelta(days=30)
@@ -1289,8 +1285,10 @@ class TestSchemasParameterValidationBranches:
 
     def test_api_key_expires_too_far_raises(self) -> None:
         """APIKeyCreateRequest with expiry > 2 years raises ValueError."""
-        import pytest
         from datetime import datetime, timedelta, timezone
+
+        import pytest
+
         from app.models.schemas import APIKeyCreateRequest
 
         far_future = datetime.now(timezone.utc) + timedelta(days=800)
@@ -1311,7 +1309,6 @@ class TestSchemasParameterValidationBranches:
     def test_api_key_update_request_no_fields(self) -> None:
         """APIKeyUpdateRequest with no fields (line 1929 model_validator)."""
         from app.models.schemas import APIKeyCreateRequest
-        from datetime import datetime, timedelta, timezone
 
         # Test model_validator that sets default expiry
         req = APIKeyCreateRequest(name="key", permissions=["read"])
@@ -1328,8 +1325,7 @@ class TestSessionManagerRemainingLines:
 
     def test_deep_merge_dict_base_dict_override_non_dict(self) -> None:
         """Cover line 145: base[key] = value when base[key] is dict but override is not."""
-        import asyncio
-        from unittest.mock import MagicMock, AsyncMock
+        from unittest.mock import MagicMock
 
         from app.services.session_manager import SimulationSession
 
@@ -1357,7 +1353,7 @@ class TestSessionManagerRemainingLines:
     def test_persist_session_get_state_exception(self) -> None:
         """Cover lines 458-459: exception when get_state() fails."""
         import asyncio
-        from unittest.mock import MagicMock, AsyncMock
+        from unittest.mock import AsyncMock, MagicMock
 
         from app.services.session_manager import SessionManager
 
@@ -1386,7 +1382,7 @@ class TestSessionManagerRemainingLines:
     def test_evict_oldest_sessions(self) -> None:
         """Cover lines 469-470: evict oldest sessions when over max size."""
         import asyncio
-        from unittest.mock import MagicMock, AsyncMock
+        from unittest.mock import AsyncMock, MagicMock
 
         from app.services.session_manager import SessionManager
 
@@ -1423,7 +1419,7 @@ class TestSessionManagerRemainingLines:
     def test_create_session_no_config_raises(self) -> None:
         """Cover line 554: ValueError when no config_path or custom_config."""
         import asyncio
-        from unittest.mock import MagicMock, AsyncMock
+        from unittest.mock import AsyncMock, MagicMock
 
         from app.services.session_manager import SessionManager
 
@@ -1451,6 +1447,7 @@ class TestSessionManagerRemainingLines:
             await manager.create_session(request, "user1")
 
         import pytest
+
         with pytest.raises((ValueError, Exception)):
             loop = asyncio.new_event_loop()
             try:
@@ -1461,8 +1458,9 @@ class TestSessionManagerRemainingLines:
     def test_get_session_not_found_no_user(self) -> None:
         """Cover line 677: raise ValueError when session not in DB and no user_id."""
         import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+
         import pytest
-        from unittest.mock import MagicMock, AsyncMock
 
         from app.services.session_manager import SessionManager
 
@@ -1553,6 +1551,7 @@ class TestTaskRoutesAdditional:
     def test_task_submit_queue_depth_exceeded(self) -> None:
         """Cover lines 135-136: queue depth > 1000 triggers 503."""
         from unittest.mock import patch
+
         from fastapi.testclient import TestClient
 
         from app.main import create_app
@@ -1565,14 +1564,19 @@ class TestTaskRoutesAdditional:
             # Correct path: /v1/sessions/{session_id}/tasks
             response = client.post(
                 "/v1/sessions/test-session-id/tasks",
-                json={"task_type": "iowa_gambling", "parameters": {}, "session_id": "test-session-id"},
+                json={
+                    "task_type": "iowa_gambling",
+                    "parameters": {},
+                    "session_id": "test-session-id",
+                },
                 headers=headers,
             )
         assert response.status_code in [401, 403, 422, 503]
 
     def test_task_status_etag_match(self) -> None:
         """Cover line 215: If-None-Match header matches ETag → 304."""
-        from unittest.mock import patch, AsyncMock, MagicMock
+        from unittest.mock import AsyncMock, MagicMock, patch
+
         from fastapi.testclient import TestClient
 
         from app.main import create_app
@@ -1592,7 +1596,9 @@ class TestTaskRoutesAdditional:
         mock_executor.get_task_status = AsyncMock(return_value=mock_status)
 
         with patch("app.routes.tasks.get_task_executor", return_value=mock_executor):
-            import hashlib, json
+            import hashlib
+            import json
+
             etag_content = f"completed:{json.dumps({'output': 'done'}, sort_keys=True)}"
             etag = f'W/"{hashlib.sha256(etag_content.encode()).hexdigest()}"'
 
@@ -1608,7 +1614,8 @@ class TestTaskRoutesAdditional:
 
     def test_task_status_no_etag_match(self) -> None:
         """Cover branch 229->233: completed task with no ETag match."""
-        from unittest.mock import patch, AsyncMock, MagicMock
+        from unittest.mock import AsyncMock, MagicMock, patch
+
         from fastapi.testclient import TestClient
 
         from app.main import create_app
@@ -1646,7 +1653,8 @@ class TestStateRoutesValueError:
 
     def test_get_ignition_events_session_not_found(self) -> None:
         """Cover lines 316-317: ValueError in get_ignition_history raises 404."""
-        from unittest.mock import patch, AsyncMock, MagicMock
+        from unittest.mock import AsyncMock, MagicMock, patch
+
         from fastapi.testclient import TestClient
 
         from app.main import create_app
@@ -1676,7 +1684,8 @@ class TestHealthCheckRowNone:
 
     def test_health_check_db_row_none_second_query(self) -> None:
         """Cover line 161 using patched engine where second query returns None row."""
-        from unittest.mock import MagicMock, patch, AsyncMock
+        from unittest.mock import AsyncMock, MagicMock, patch
+
         from app.services.health_check import HealthCheckService
 
         mock_redis = AsyncMock()
@@ -1751,8 +1760,10 @@ class TestSecurityValidationSearchField:
 
     @staticmethod
     def _get_middleware():  # type: ignore[return]
-        from app.middleware.security_validation import SecurityValidationMiddleware
         from unittest.mock import MagicMock
+
+        from app.middleware.security_validation import SecurityValidationMiddleware
+
         return SecurityValidationMiddleware(MagicMock())
 
     def test_string_min_length_fail(self) -> None:
@@ -1807,6 +1818,7 @@ class TestSchemasValidParamBranches:
     def test_attentional_blink_valid_params(self) -> None:
         """Cover False branches of all attentional_blink parameter checks."""
         from app.models.schemas import TaskSubmitRequest
+
         req = TaskSubmitRequest(
             task_type="attentional_blink",
             session_id="test-session-123",
@@ -1823,6 +1835,7 @@ class TestSchemasValidParamBranches:
     def test_iowa_gambling_valid_params(self) -> None:
         """Cover False branches of all iowa_gambling parameter checks."""
         from app.models.schemas import TaskSubmitRequest
+
         req = TaskSubmitRequest(
             task_type="iowa_gambling",
             session_id="test-session-456",
@@ -1839,8 +1852,10 @@ class TestSchemasValidParamBranches:
 
     def test_api_key_create_with_valid_expiry(self) -> None:
         """Cover the expires_at validator True branch (v is not None)."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
+
         from app.models.schemas import APIKeyCreateRequest
+
         future_date = datetime.now(timezone.utc) + timedelta(days=30)
         req = APIKeyCreateRequest(
             name="test-key",
@@ -1852,7 +1867,9 @@ class TestSchemasValidParamBranches:
         """Cover line 1929: empty permission string raises ValueError."""
         import pytest
         from pydantic import ValidationError
+
         from app.models.schemas import APIKeyUpdateRequest
+
         with pytest.raises((ValidationError, ValueError)):
             APIKeyUpdateRequest(permissions=[""])
 
@@ -1875,7 +1892,9 @@ class TestSessionManagerAdditionalCoverage:
     def test_get_session_user_id_set_not_found(self) -> None:
         """Cover line 677: ValueError with 'access denied' when user_id set but session not found."""
         import asyncio
+
         import pytest
+
         from app.services.session_manager import SessionManager
 
         manager = SessionManager.__new__(SessionManager)
@@ -1893,8 +1912,7 @@ class TestSessionManagerAdditionalCoverage:
 
         async def run_test() -> None:
             await manager.get_session(
-                "00000000-0000-0000-0000-000000000002",
-                user_id="some-user-id"
+                "00000000-0000-0000-0000-000000000002", user_id="some-user-id"
             )
 
         with pytest.raises(ValueError, match="access denied|not found"):
@@ -1917,6 +1935,7 @@ class TestTaskRoutesWithAuth:
     @staticmethod
     def _make_app_with_fake_user():  # type: ignore[return]
         from datetime import datetime, timedelta, timezone
+
         from app.main import create_app
         from app.models.schemas import TokenPayload
         from app.services.authorization import get_current_user
@@ -1937,7 +1956,9 @@ class TestTaskRoutesWithAuth:
     def test_queue_depth_exceeded_503(self) -> None:
         """Cover lines 135-136: queue depth > 1000 returns 503."""
         from unittest.mock import patch
+
         from fastapi.testclient import TestClient
+
         from app.routes.tasks import get_task_executor
 
         app = self._make_app_with_fake_user()
@@ -1963,7 +1984,9 @@ class TestTaskRoutesWithAuth:
         """Cover line 215: If-None-Match header matches ETag returns 304."""
         import hashlib
         import json
+
         from fastapi.testclient import TestClient
+
         from app.routes.tasks import get_task_executor
 
         app = self._make_app_with_fake_user()
@@ -1992,6 +2015,7 @@ class TestTaskRoutesWithAuth:
     def test_task_status_completed_etag_header(self) -> None:
         """Cover branch 205->218 False (ETag not matched) and 229->233 (ETag header set)."""
         from fastapi.testclient import TestClient
+
         from app.routes.tasks import get_task_executor
 
         app = self._make_app_with_fake_user()

@@ -27,21 +27,21 @@ _context: Any = None
 
 # Handle OpenTelemetry compatibility issues with Python 3.14
 try:
-    from opentelemetry import context as _context
-    from opentelemetry import propagate as _propagate
-    from opentelemetry import trace as _trace
+    from opentelemetry import context as _context  # type: ignore[no-redef]
+    from opentelemetry import propagate as _propagate  # type: ignore[no-redef]
+    from opentelemetry import trace as _trace  # type: ignore[no-redef]
     from opentelemetry.exporter.jaeger.thrift import JaegerExporter as _JaegerExporterInstance
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[no-redef]
         OTLPSpanExporter as _OTLPSpanExporter,
     )
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor as _FastAPIInstrumentor
-    from opentelemetry.instrumentation.redis import RedisInstrumentor as _RedisInstrumentor
-    from opentelemetry.instrumentation.sqlalchemy import (
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor as _FastAPIInstrumentor  # type: ignore[no-redef]
+    from opentelemetry.instrumentation.redis import RedisInstrumentor as _RedisInstrumentor  # type: ignore[no-redef]
+    from opentelemetry.instrumentation.sqlalchemy import (  # type: ignore[no-redef]
         SQLAlchemyInstrumentor as _SQLAlchemyInstrumentor,
     )
-    from opentelemetry.sdk.resources import Resource as _Resource
-    from opentelemetry.sdk.trace import TracerProvider as _TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor as _BatchSpanProcessor
+    from opentelemetry.sdk.resources import Resource as _Resource  # type: ignore[no-redef]
+    from opentelemetry.sdk.trace import TracerProvider as _TracerProvider  # type: ignore[no-redef]
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor as _BatchSpanProcessor  # type: ignore[no-redef]
 
     # For test compatibility, also expose as _mock_trace when mocked
     _mock_trace = _trace

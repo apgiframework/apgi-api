@@ -66,11 +66,22 @@ def test_middleware_order_invariant() -> None:
     assert "AuthenticationMiddleware" in middleware_names
 
 
+def _flatten_route_paths(routes: list) -> list:
+    """Recursively resolve route paths, unwrapping FastAPI's deferred router includes."""
+    paths = []
+    for route in routes:
+        if hasattr(route, "path"):
+            paths.append(route.path)
+        elif hasattr(route, "original_router"):
+            paths.extend(_flatten_route_paths(route.original_router.routes))
+    return paths
+
+
 def test_required_routes_present() -> None:
     """Ensure all critical API routers are included."""
     app = create_app(test_mode=True)
 
-    routes = [r.path for r in app.routes]
+    routes = _flatten_route_paths(app.routes)
 
     assert "/" in routes
     assert "/health" in routes

@@ -27,7 +27,7 @@ class Settings:
         self.environment: str = os.getenv("ENVIRONMENT", "development")
 
         # Validate environment
-        ALLOWED_ENVIRONMENTS = ["development", "staging", "production", "prod"]
+        ALLOWED_ENVIRONMENTS = ["development", "test", "staging", "production", "prod"]
         if self.environment not in ALLOWED_ENVIRONMENTS:
             raise ValueError(
                 f"Invalid ENVIRONMENT: {self.environment}. Must be one of {ALLOWED_ENVIRONMENTS}"
