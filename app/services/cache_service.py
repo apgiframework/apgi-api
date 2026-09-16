@@ -6,7 +6,7 @@ Comprehensive caching implementation for session states, user data, and frequent
 
 import base64
 import json
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional
 
 import redis.asyncio as redis
 from cryptography.fernet import Fernet
@@ -132,7 +132,7 @@ class CacheService:
         """
         key = f"{self.prefixes['session']}{session_id}:state"
         try:
-            result = cast(int, await self.redis.delete(key))
+            result = await self.redis.delete(key)
             return result > 0
         except Exception:
             return False
@@ -306,7 +306,7 @@ class CacheService:
         pattern = f"{self.prefixes['session']}{session_id}:*"
         keys = [key async for key in self.redis.scan_iter(pattern)]
         if keys:
-            return await self.redis.delete(*keys)  # type: ignore[no-any-return]
+            return await self.redis.delete(*keys)
         return 0
 
     async def invalidate_user_cache(self, user_id: str) -> int:
@@ -322,7 +322,7 @@ class CacheService:
         pattern = f"{self.prefixes['user']}{user_id}:*"
         keys = [key async for key in self.redis.scan_iter(pattern)]
         if keys:
-            return await self.redis.delete(*keys)  # type: ignore[no-any-return]
+            return await self.redis.delete(*keys)
         return 0
 
     async def clear_expired_cache(self) -> int:
@@ -346,7 +346,7 @@ class CacheService:
         Returns:
             Dictionary with cache statistics
         """
-        stats = {}
+        stats: Dict[str, Any] = {}
         for prefix_name, prefix in self.prefixes.items():
             pattern = f"{prefix}*"
             keys = [key async for key in self.redis.scan_iter(pattern)]
@@ -364,7 +364,7 @@ class CacheService:
         try:
             json_data = json.dumps(data, default=str)
             encrypted = self.fernet.encrypt(json_data.encode())
-            return await self.redis.setex(key, ttl, encrypted)  # type: ignore[no-any-return]
+            return await self.redis.setex(key, ttl, encrypted)
         except Exception:
             return False
 
@@ -383,7 +383,7 @@ class CacheService:
         """Set JSON data in cache."""
         try:
             json_data = json.dumps(data, default=str)
-            return await self.redis.setex(key, ttl, json_data)  # type: ignore[no-any-return]
+            return await self.redis.setex(key, ttl, json_data)
         except Exception:
             return False
 

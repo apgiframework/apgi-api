@@ -369,11 +369,7 @@ In our API, we implement APGI as a computational system where:
 
 ## Next Steps
 
-👉 **Ready to see this in action?** Move to [HANDS_ON.md](./HANDS_ON.md)
-
-👉 **Want exercises?** Jump to the [EXERCISES](./EXERCISES/) folder
-
-👉 **Want to see the code?** Check [CODE_EXAMPLES](./CODE_EXAMPLES/)
+👉 **Ready to see this in action?** Move to [HANDS-ON.md](./HANDS-ON.md)
 
 ---
 

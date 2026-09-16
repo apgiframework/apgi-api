@@ -43,7 +43,7 @@ class HealthCheckService:
         # Check Redis connectivity (critical for session management)
         try:
             start_time = time.time()
-            redis_result = await self.redis_client.ping()  # type: ignore[misc]
+            redis_result = await self.redis_client.ping()
             redis_time = time.time() - start_time
 
             # Performance threshold (in seconds)
@@ -116,7 +116,7 @@ class HealthCheckService:
         # Check Redis connectivity and performance
         try:
             start_time = time.time()
-            redis_result = await self.redis_client.ping()  # type: ignore[misc]
+            redis_result = await self.redis_client.ping()
             redis_time = time.time() - start_time
 
             # Performance threshold (in seconds)

@@ -584,7 +584,9 @@ class TaskExecutor:
                     status_info["error"] = task_record.error_message
 
             # Check for stuck running tasks (worker may have crashed)
-            elif task_record.status == TaskStatus.RUNNING.value and task_record.started_at:  # pragma: no branch
+            elif (
+                task_record.status == TaskStatus.RUNNING.value and task_record.started_at
+            ):  # pragma: no branch
                 time_running = (datetime.now(timezone.utc) - task_record.started_at).total_seconds()
                 from app.config import settings
 

@@ -375,7 +375,6 @@ docker-compose -f deployment/docker-compose.yml up
 
 - [Configuration Guide](docs/CONFIGURATION.md) - Complete configuration reference
 - [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment instructions
-- [Migration Guide](docs/MIGRATION.md) - Migrating from legacy API
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [API Documentation](<http://localhost:8000/docs>) - Interactive API docs (when server is running)
 

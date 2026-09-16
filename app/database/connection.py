@@ -293,13 +293,17 @@ def get_pool_status() -> dict[str, Any]:
     """
     pool = engine.pool
 
-    status = {
-        "pool_size": getattr(pool, "size", 0),
-        "checked_in": getattr(pool, "checkedin", 0),
-        "checked_out": getattr(pool, "checkedout", 0),
-        "overflow": getattr(pool, "overflow", 0),
-        "invalid": getattr(pool, "invalid", 0),
-        "timeout": getattr(pool, "timeout", 0),
+    def _pool_stat(name: str) -> int:
+        value = getattr(pool, name, 0)
+        return value() if callable(value) else value
+
+    status: dict[str, Any] = {
+        "pool_size": _pool_stat("size"),
+        "checked_in": _pool_stat("checkedin"),
+        "checked_out": _pool_stat("checkedout"),
+        "overflow": _pool_stat("overflow"),
+        "invalid": _pool_stat("invalid"),
+        "timeout": _pool_stat("timeout"),
     }
 
     # Calculate utilization

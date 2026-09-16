@@ -23,6 +23,7 @@ pip-delete-this-directory.txt
 nosetests.xml
 coverage.xml
 htmlcov/
+test.db
 .hypothesis/
 .pytest_cache/
 .vscode/

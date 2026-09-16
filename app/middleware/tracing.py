@@ -82,7 +82,7 @@ def configure_distributed_tracing(
         # Console exporter for development
         if enable_console_exporter or False:
             console_processor = BatchSpanProcessor(ConsoleSpanExporter())
-            tracer_provider.add_span_processor(console_processor)  # type: ignore[attr-defined]
+            tracer_provider.add_span_processor(console_processor)
             logger.info("Console trace exporter enabled")
 
         # Jaeger exporter
@@ -94,7 +94,7 @@ def configure_distributed_tracing(
                 agent_port=int(jaeger_endpoint.split(":")[1]) if ":" in jaeger_endpoint else 6831,
             )
             jaeger_processor = BatchSpanProcessor(jaeger_exporter)
-            tracer_provider.add_span_processor(jaeger_processor)  # type: ignore[attr-defined]
+            tracer_provider.add_span_processor(jaeger_processor)
             logger.info(f"Jaeger trace exporter configured at {jaeger_endpoint}")
         elif jaeger_endpoint and not JAEGER_EXPORTER_AVAILABLE:
             logger.warning(
@@ -108,7 +108,7 @@ def configure_distributed_tracing(
                 insecure=True,  # For development; use TLS in production
             )
             otlp_processor = BatchSpanProcessor(otlp_exporter)
-            tracer_provider.add_span_processor(otlp_processor)  # type: ignore[attr-defined]
+            tracer_provider.add_span_processor(otlp_processor)
             logger.info(f"OTLP gRPC trace exporter configured at {otlp_endpoint}")
 
         # Instrument frameworks
