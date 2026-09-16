@@ -16,7 +16,6 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from app.config import settings
 from app.database.encryption import EncryptedString
 
 Base = declarative_base()
@@ -71,7 +70,7 @@ class User(Base):  # type: ignore[misc, valid-type]
     )
     password_hash = Column(String(255), nullable=False, comment="Hashed password")
     roles: Mapped[list[str]] = mapped_column(
-        JSON if settings.database_url.startswith("sqlite") else ARRAY(sa.Text()),
+        JSON().with_variant(ARRAY(sa.Text()), "postgresql"),
         nullable=False,
         default=list,
         comment="User roles for RBAC",
@@ -237,7 +236,7 @@ class Session(Base):  # type: ignore[misc, valid-type]
     )
     description = Column(Text, nullable=True, comment="Human-readable session description")
     tags: Mapped[list[str]] = mapped_column(
-        JSON if settings.database_url.startswith("sqlite") else ARRAY(String),
+        JSON().with_variant(ARRAY(String), "postgresql"),
         nullable=True,
         default=list,
         comment="Session tags for organization",
