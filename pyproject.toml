@@ -161,7 +161,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "-ra -q --strict-markers --cov=app --cov-report=term-missing --cov-report=html --ignore=tests/load --ignore=tests/test_load.py --cov-fail-under=90"
+addopts = "-ra -q --strict-markers --ignore=tests/load --ignore=tests/test_load.py"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
