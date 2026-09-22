@@ -1,4 +1,4 @@
-name: Deploy apgi-core to Cloud Run
+name: Deploy apgi-api to Cloud Run
 description: >
   Authenticates to GCP via Workload Identity Federation (no service-account
   keys), builds and pushes the container image to Artifact Registry, runs
@@ -41,7 +41,7 @@ runs:
       id: image
       shell: bash
       env:
-        IMAGE: ${{ inputs.region }}-docker.pkg.dev/${{ inputs.project_id }}/apgi-core/apgi-core:${{ github.sha }}
+        IMAGE: ${{ inputs.region }}-docker.pkg.dev/${{ inputs.project_id }}/apgi-images/apgi-api:${{ github.sha }}
       run: |
         docker build -f deployment/Dockerfile -t "$IMAGE" .
         docker push "$IMAGE"
@@ -68,7 +68,7 @@ runs:
     - name: Deploy to Cloud Run
       shell: bash
       run: |
-        gcloud run deploy apgi-core \
+        gcloud run deploy apgi-api \
           --project="${{ inputs.project_id }}" \
           --region="${{ inputs.region }}" \
           --image="${{ steps.image.outputs.image }}" \
@@ -77,5 +77,5 @@ runs:
     - name: Smoke-test the deployed revision
       shell: bash
       run: |
-        URL=$(gcloud run services describe apgi-core --project="${{ inputs.project_id }}" --region="${{ inputs.region }}" --format='value(status.url)')
+        URL=$(gcloud run services describe apgi-api --project="${{ inputs.project_id }}" --region="${{ inputs.region }}" --format='value(status.url)')
         curl -sSf "$URL/health" > /dev/null

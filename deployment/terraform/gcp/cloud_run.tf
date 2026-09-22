@@ -1,11 +1,11 @@
-# apgi-core as a private-by-default Cloud Run v2 service. The service itself
+# apgi-api as a private-by-default Cloud Run v2 service. The service itself
 # allows unauthenticated ingress (it's a public REST API — auth is enforced at
 # the application layer by JWT/API-key middleware, not by IAM), but every
 # resource it talks to (Cloud SQL, Redis, Secret Manager, GCS, BigQuery) is
 # reachable only via its dedicated runtime service account.
 
 locals {
-  base_url = var.api_domain != null ? "https://${var.api_domain}" : "https://apgi-core-${var.environment}.run.app"
+  base_url = var.api_domain != null ? "https://${var.api_domain}" : "https://apgi-api-${var.environment}.run.app"
 
   secret_env_names = [
     "JWT_SECRET_KEY",
@@ -20,7 +20,7 @@ locals {
 
 resource "google_cloud_run_v2_service" "apgi_core" {
   project  = var.project_id
-  name     = "apgi-core"
+  name     = "apgi-api"
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
 
