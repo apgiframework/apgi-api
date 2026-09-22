@@ -18,7 +18,7 @@ resource "google_monitoring_notification_channel" "email" {
 resource "google_monitoring_uptime_check_config" "health" {
   count        = var.api_domain != null ? 1 : 0
   project      = var.project_id
-  display_name = "apgi-core /health/ready (${var.environment})"
+  display_name = "apgi-api /health/ready (${var.environment})"
   timeout      = "10s"
   period       = "60s"
 
@@ -40,7 +40,7 @@ resource "google_monitoring_uptime_check_config" "health" {
 resource "google_monitoring_alert_policy" "uptime_failure" {
   count        = var.api_domain != null ? 1 : 0
   project      = var.project_id
-  display_name = "apgi-core uptime check failing (${var.environment})"
+  display_name = "apgi-api uptime check failing (${var.environment})"
   combiner     = "OR"
 
   conditions {
@@ -79,7 +79,7 @@ resource "google_logging_metric" "error_severity_count" {
 
 resource "google_monitoring_alert_policy" "error_rate" {
   project      = var.project_id
-  display_name = "apgi-core elevated error rate (${var.environment})"
+  display_name = "apgi-api elevated error rate (${var.environment})"
   combiner     = "OR"
 
   conditions {

@@ -5,9 +5,9 @@
 
 resource "google_service_account" "runtime" {
   project      = var.project_id
-  account_id   = "apgi-core-runtime"
-  display_name = "apgi-core Cloud Run runtime (${var.environment})"
-  description  = "Identity the apgi-core Cloud Run service runs as. Least-privilege — no IAM admin, no project-level roles."
+  account_id   = "apgi-api-runtime"
+  display_name = "apgi-api Cloud Run runtime (${var.environment})"
+  description  = "Identity the apgi-api Cloud Run service runs as. Least-privilege — no IAM admin, no project-level roles."
 }
 
 locals {
