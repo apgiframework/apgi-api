@@ -13,11 +13,13 @@ from urllib.parse import urlparse
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from app import __version__
+
 router = APIRouter(prefix="/v1", tags=["Version"])
 
 
 # Version configuration - use environment variables with defaults
-CURRENT_VERSION = os.getenv("API_VERSION", "1.0.0")
+CURRENT_VERSION = os.getenv("API_VERSION", __version__)
 API_VERSION = os.getenv("API_VERSION_PREFIX", "v1")
 SUPPORTED_VERSIONS = [API_VERSION]
 DEPRECATED_VERSIONS: List[str] = []

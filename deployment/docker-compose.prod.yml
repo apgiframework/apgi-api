@@ -82,7 +82,7 @@ services:
       
       # API Configuration
       API_TITLE: APGI Standalone API
-      API_VERSION: 1.0.0
+      API_VERSION: 1.1.0
     depends_on:
       postgres:
         condition: service_healthy

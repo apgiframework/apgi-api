@@ -11,6 +11,8 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
+from app import __version__
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -35,7 +37,7 @@ class Settings:
 
         # API Settings
         self.api_title: str = "APGI System API"
-        self.api_version: str = "1.0.0"
+        self.api_version: str = __version__
         self.api_description: str = "REST API for consciousness modeling"
 
         # Base URL for generating links

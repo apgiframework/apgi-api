@@ -4,7 +4,7 @@ Standalone APGI API Application
 This package contains the standalone REST API for the APGI system.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 from typing import Any, Dict, Optional, Union
 

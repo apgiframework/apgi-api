@@ -11,7 +11,7 @@
 # Fields marked TODO are outstanding items named in §0.0 of the empirical plan.
 
 schema_version: 1
-last_reviewed: 2026-09-03
+last_reviewed: 2026-10-17
 
 researcher:
   orcid: "0009-0005-0328-2896"
@@ -39,6 +39,9 @@ zenodo:
   resolves: "unverified"        # set to "verified" once doi.org resolves in a clean browser session
 
 code:
+  # Software release of this repository (app.__version__ / pyproject.toml).
+  # Kept in step with apgiframework/apgi-framework releases.
+  version: "1.1.0"
   organisation: "https://github.com/apgiframework"
   repositories:
     - name: "apgi-api"

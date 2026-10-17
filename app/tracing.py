@@ -9,6 +9,8 @@ import warnings
 from typing import TYPE_CHECKING, Any, Dict, Optional
 from unittest.mock import MagicMock
 
+from app import __version__
+
 if TYPE_CHECKING:
     pass
 
@@ -83,7 +85,7 @@ def configure_distributed_tracing() -> None:
     jaeger_endpoint = os.getenv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
     otlp_endpoint = os.getenv("OTLP_ENDPOINT", "http://localhost:4317")
     service_name = os.getenv("TRACING_SERVICE_NAME", "apgi-api")
-    service_version = os.getenv("API_VERSION", "1.0.0")
+    service_version = os.getenv("API_VERSION", __version__)
 
     if not tracing_enabled:
         return

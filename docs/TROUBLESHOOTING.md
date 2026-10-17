@@ -1654,7 +1654,7 @@ kubectl get pod <pod-name> -o jsonpath='{.spec.containers[0].image}'
 
 ```yaml
 # deployment.yaml
-image: your-registry.com/apgi-api:1.0.0  # Correct registry and tag
+image: your-registry.com/apgi-api:1.1.0  # Correct registry and tag
 ```
 
 - **Add image pull secret:**

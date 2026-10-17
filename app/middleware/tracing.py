@@ -7,6 +7,8 @@ Configures OpenTelemetry for distributed tracing across the application.
 import logging
 from typing import Any, Optional
 
+from app import __version__
+
 # Make OpenTelemetry imports conditional to handle compatibility issues
 try:
     from opentelemetry import trace
@@ -43,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 def configure_distributed_tracing(
     service_name: str = "apgi-api",
-    service_version: str = "1.0.0",
+    service_version: str = __version__,
     jaeger_endpoint: Optional[str] = None,
     otlp_endpoint: Optional[str] = None,
     enable_console_exporter: bool = False,
@@ -182,7 +184,7 @@ def instrument_application() -> None:
         # Configure tracing based on settings
         configure_distributed_tracing(
             service_name=getattr(settings, "tracing_service_name", "apgi-api"),
-            service_version=getattr(settings, "tracing_service_version", "1.0.0"),
+            service_version=getattr(settings, "tracing_service_version", __version__),
             jaeger_endpoint=getattr(settings, "jaeger_endpoint", None),
             otlp_endpoint=getattr(settings, "otlp_endpoint", None),
             enable_console_exporter=getattr(settings, "tracing_console_exporter", False),

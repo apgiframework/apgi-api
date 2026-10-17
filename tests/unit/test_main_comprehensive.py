@@ -305,7 +305,7 @@ class TestCreateAppComprehensive:
 
         assert isinstance(app, FastAPI)
         assert app.title == "APGI System API"
-        assert app.version == "1.0.0"
+        assert app.version == "1.1.0"
         assert "REST API for Allostatic Precision-Gated Ignition" in app.description
 
     def test_create_app_production_mode(self) -> None:
@@ -403,7 +403,7 @@ class TestCreateAppComprehensive:
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "APGI System API"
-        assert data["version"] == "1.0.0"
+        assert data["version"] == "1.1.0"
         assert data["docs"] == "/docs"
         assert data["health"] == "/health"
 
