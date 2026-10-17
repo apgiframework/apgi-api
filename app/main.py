@@ -30,6 +30,7 @@ from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles  # noqa: F401
 
+from app import __version__
 from app.config import settings
 from app.database.connection import close_db, init_db
 from app.exception_handlers import register_exception_handlers
@@ -249,7 +250,7 @@ def create_app(test_mode: bool = False) -> FastAPI:
     """
     app = FastAPI(
         title="APGI System API",
-        version="1.0.0",
+        version=__version__,
         description="""REST API for Allostatic Precision-Gated Ignition consciousness modeling.
 
 ## Rate Limiting
@@ -374,7 +375,7 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
         """API root endpoint with basic information."""
         return {
             "name": "APGI System API",
-            "version": "1.0.0",
+            "version": __version__,
             "description": "REST API for consciousness modeling",
             "docs": "/docs",
             "health": "/health",
@@ -410,7 +411,7 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
     if os.path.exists(web_dir):
         app.mount("/web", StaticFiles(directory=web_dir), name="web")
 
-    logger.info("APGI API application created successfully", version="1.0.0")
+    logger.info("APGI API application created successfully", version=__version__)
 
     return app
 

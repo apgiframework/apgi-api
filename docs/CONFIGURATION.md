@@ -82,7 +82,7 @@ API_TITLE="APGI Consciousness Modeling API"
 
 **Type:** String
 
-**Default:** `1.0.0`
+**Default:** `1.1.0` (`app.__version__`)
 
 **Required:** No
 

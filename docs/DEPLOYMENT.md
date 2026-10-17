@@ -323,7 +323,7 @@ ENVIRONMENT=production  # development, staging, or production
 
 # API Settings
 API_TITLE=APGI Standalone API
-API_VERSION=1.0.0
+API_VERSION=1.1.0
 HOST=0.0.0.0
 PORT=8000
 
@@ -490,10 +490,10 @@ docker-compose -f deployment/docker-compose.prod.yml up -d --scale celery_worker
 
 ```bash
 # Tag image
-docker tag apgi-api:latest your-registry.com/apgi-api:1.0.0
+docker tag apgi-api:latest your-registry.com/apgi-api:1.1.0
 
 # Push to registry
-docker push your-registry.com/apgi-api:1.0.0
+docker push your-registry.com/apgi-api:1.1.0
 ```
 
 ### Step 2: Create Kubernetes Secrets
@@ -629,7 +629,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: your-registry.com/apgi-api:1.0.0
+        image: your-registry.com/apgi-api:1.1.0
         ports:
         - containerPort: 8000
         env:
@@ -711,7 +711,7 @@ spec:
     spec:
       containers:
       - name: worker
-        image: your-registry.com/apgi-api:1.0.0
+        image: your-registry.com/apgi-api:1.1.0
         command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
         env:
         - name: ENVIRONMENT
@@ -1261,7 +1261,7 @@ kubectl apply -f api-hpa.yaml
 docker tag apgi-api:latest apgi-api:backup
 
 # Pull previous version
-docker pull your-registry.com/apgi-api:1.0.0
+docker pull your-registry.com/apgi-api:1.1.0
 
 # Restart with previous version
 docker-compose down

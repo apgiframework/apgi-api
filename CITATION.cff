@@ -10,8 +10,8 @@ authors:
   - family-names: 'Pesochin'
     given-names: 'Dimitry'
     orcid: 'https://orcid.org/0009-0005-0328-2896'
-version: '0.0.0'
-date-released: 2026-09-03
+version: '1.1.0'
+date-released: 2026-10-17
 license: 'Apache-2.0'
 repository-code: 'https://github.com/apgiframework/apgi-api'
 url: 'https://apgiframework.com'

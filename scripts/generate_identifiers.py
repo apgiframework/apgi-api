@@ -129,8 +129,7 @@ def render_citation_cff(ids: dict[str, Any]) -> str:
     researcher = ids["researcher"]
     zenodo = ids["zenodo"]
     code = ids["code"]
-    release_state = ids["release_state"]
-    version = release_state.get("model_version") or "0.0.0"
+    version = code["version"]
     repo_url = f"{code['organisation']}/apgi-api"
 
     identifiers_block = f"""identifiers:
@@ -184,6 +183,7 @@ def render_zenodo_json(ids: dict[str, Any]) -> str:
             }
         ],
         "license": ids["licences"]["code"],
+        "version": ids["code"]["version"],
         "upload_type": "software",
         "access_right": "open",
         "keywords": [
