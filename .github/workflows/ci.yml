@@ -96,9 +96,9 @@ jobs:
       - name: Check for known vulnerabilities
         run: |
           safety check --json --output safety-report.json || true
-          # 64396/64459: unfixable side-channel issues in the transitive `ecdsa`
-          # dependency (pulled in by python-jose) - no patched release exists upstream.
-          safety check --ignore=64396,64459
+          # SFTY-20260902-58666: nltk is installed only as a dependency of `safety`
+          # itself (CI tooling, not shipped with the API); no patched release yet.
+          safety check --ignore=SFTY-20260902-58666
 
       - name: Upload security scan results
         uses: actions/upload-artifact@v4

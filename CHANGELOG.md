@@ -16,6 +16,10 @@ Aligned with apgi-framework 1.1.0 (protocol specification v1.1.0).
   software version (previously `0.0.0`, taken from the unset
   `release_state.model_version`) and `.zenodo.json` carries a `version` field.
 - Deployment docs and `docker-compose.prod.yml` reference the 1.1.0 image tag.
+- Dependencies: `sqlalchemy` capped below 2.1 (2.1 makes `postgresql://` use
+  psycopg 3, but the service ships psycopg2); unused `python-jose` removed
+  (JWTs are handled by PyJWT), which also drops the transitive `ecdsa`.
+- Type-check fixes for mypy 2.x and current OpenTelemetry stubs.
 
 ## [1.0.0]
 

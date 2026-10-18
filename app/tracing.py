@@ -29,9 +29,9 @@ _context: Any = None
 
 # Handle OpenTelemetry compatibility issues with Python 3.14
 try:
-    from opentelemetry import context as _context  # type: ignore[no-redef]
-    from opentelemetry import propagate as _propagate  # type: ignore[no-redef]
-    from opentelemetry import trace as _trace  # type: ignore[no-redef]
+    from opentelemetry import context as _context
+    from opentelemetry import propagate as _propagate
+    from opentelemetry import trace as _trace
     from opentelemetry.exporter.jaeger.thrift import JaegerExporter as _JaegerExporterInstance
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[no-redef]
         OTLPSpanExporter as _OTLPSpanExporter,

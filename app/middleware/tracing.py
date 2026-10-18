@@ -79,7 +79,8 @@ def configure_distributed_tracing(
         trace.set_tracer_provider(TracerProvider(resource=resource))
 
         # Add span processors based on configuration
-        tracer_provider = trace.get_tracer_provider()
+        # The API type lacks add_span_processor; the provider set above is the SDK one.
+        tracer_provider: Any = trace.get_tracer_provider()
 
         # Console exporter for development
         if enable_console_exporter or False:
