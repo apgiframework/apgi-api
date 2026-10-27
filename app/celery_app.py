@@ -37,7 +37,11 @@ celery_app = Celery(
     "apgi_tasks",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.tasks.experimental_tasks", "app.tasks.webhook_tasks"],
+    include=[
+        "app.tasks.experimental_tasks",
+        "app.tasks.webhook_tasks",
+        "app.tasks.acquisition_tasks",
+    ],
 )
 
 # Configure Celery

@@ -5,11 +5,12 @@ ORM models for persistent storage of sessions, tasks, and user data.
 """
 
 import uuid
+from datetime import datetime, timezone
 from enum import Enum as PythonEnum
 from typing import Optional
 
 import sqlalchemy as sa
-from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import JSON, BigInteger, Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -1379,3 +1380,44 @@ class NOf1Observation(Base):  # type: ignore[misc, valid-type]
 
     def __repr__(self) -> str:
         return f"<NOf1Observation(experiment_id={self.experiment_id}, phase={self.phase_label}, value={self.value})>"
+
+
+class AcquisitionUpload(Base):  # type: ignore[misc, valid-type]
+    """One chunk/file uploaded by apgi-system through the three-stage signed-URL flow.
+
+    Status lifecycle: ``pending`` (init or committed, awaiting SHA-256 job) ->
+    ``accepted`` | ``quarantined`` | ``rejected``. The bytes live in the private
+    acquisition bucket, never in this database.
+    """
+
+    __tablename__ = "acquisition_uploads"
+
+    upload_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String(128), nullable=False, index=True)
+    object_name = Column(String(512), nullable=False)
+    size_bytes = Column(BigInteger, nullable=False)
+    crc32c = Column(BigInteger, nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    sequence = Column(Integer, nullable=True)
+    principal = Column(String(64), nullable=False)
+    status = Column(String(16), nullable=False, default="pending")
+    reason = Column(Text, nullable=False, default="")
+    committed = Column(Boolean, nullable=False, default=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    __table_args__ = (Index("idx_acquisition_uploads_key", "session_id", "object_name"),)
+
+    def __repr__(self) -> str:
+        return f"<AcquisitionUpload({self.session_id}/{self.object_name}, {self.status})>"
