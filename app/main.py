@@ -53,6 +53,7 @@ from app.middleware.schema_validation import ResponseSchemaValidationMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.security_validation import SecurityValidationMiddleware
 from app.routes import (
+    acquisition,
     admin,
     api_keys,
     auth,
@@ -405,6 +406,7 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
     app.include_router(meta.router)
     app.include_router(longitudinal.router)
     app.include_router(nof1.router)
+    app.include_router(acquisition.router)
 
     # Mount static files for web UI
     web_dir = os.path.join(os.path.dirname(__file__), "..", "web")

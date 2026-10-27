@@ -298,6 +298,11 @@ class Settings:
         )
         self.gcp_project_id: Optional[str] = os.getenv("GCP_PROJECT_ID")
 
+        # Private bucket receiving acquisition chunks from apgi-system via
+        # signed URLs (app/routes/acquisition.py). Unset disables the feature.
+        self.acquisition_bucket: Optional[str] = os.getenv("ACQUISITION_BUCKET")
+        self.acquisition_url_ttl_s: int = int(os.getenv("ACQUISITION_URL_TTL_S", "900"))
+
         # Minimum Detectable Change gate (Phase 5, §5.2): a longitudinal
         # change report is only released to a subscriber once the observed
         # change clears MDC95 for that index — never shown as a raw delta.
