@@ -41,6 +41,10 @@ jobs:
         run: |
           flake8 app/ tests/
 
+      - name: Enforce module boundaries (import-linter)
+        run: |
+          lint-imports
+
   # ============================================================================
   # Type Checking
   # ============================================================================

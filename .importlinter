@@ -1,0 +1,11 @@
+[importlinter]
+root_packages =
+    app
+
+[importlinter:contract:modules-independent-of-routes]
+name = Domain modules must not import HTTP routes
+type = forbidden
+source_modules =
+    app.modules
+forbidden_modules =
+    app.routes

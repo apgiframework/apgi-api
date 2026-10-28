@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://api.apgiframework.com/contracts/events/item-response-1.0.0.json",
+  "title": "ItemResponse",
+  "description": "A single Layer 1 self-report response. Carries the instrument hash, item position, latency and answer changes; never a client-computed score.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "seq_no", "instrument_id", "instrument_version", "instrument_sha256", "item_id", "item_position", "response"],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "seq_no": {"type": "integer", "minimum": 0},
+    "instrument_id": {"type": "string", "minLength": 1},
+    "instrument_version": {"type": "string", "minLength": 1},
+    "instrument_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "item_id": {"type": "string", "minLength": 1},
+    "item_position": {"type": "integer", "minimum": 0},
+    "response": {"type": "integer"},
+    "latency_ms": {"type": "number", "minimum": 0},
+    "answer_changes": {"type": "integer", "minimum": 0},
+    "timing_provenance": {"enum": ["client_monotonic", "client_wall", "device_sensor"]}
+  }
+}

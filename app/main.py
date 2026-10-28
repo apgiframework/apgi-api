@@ -49,6 +49,7 @@ from app.middleware.logging import (
 from app.middleware.metrics import PrometheusMetricsMiddleware
 from app.middleware.profiling import ProfilingMiddleware
 from app.middleware.rate_limiting import RateLimitingMiddleware
+from app.middleware.release_headers import ReleaseHeadersMiddleware
 from app.middleware.request_size_limit import RequestSizeLimitMiddleware
 from app.middleware.schema_validation import ResponseSchemaValidationMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -371,6 +372,7 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
 
     # Add security headers middleware (Outer)
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(ReleaseHeadersMiddleware)
 
     # Add deprecation middleware (Outermost)
     app.add_middleware(

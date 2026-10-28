@@ -43,6 +43,8 @@ class MetaResponse(BaseModel):
     web: dict[str, Any]
     licences: dict[str, Any]
     release_state: dict[str, Any]
+    ethics_number: Optional[str] = None  # null until IRB approval
+    version_lattice: dict[str, Any] = {}
 
 
 class DatasetCardResponse(BaseModel):
