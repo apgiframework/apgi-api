@@ -101,7 +101,7 @@ resource "google_cloud_run_v2_service" "apgi_core" {
       }
       env {
         name  = "CORS_ORIGINS"
-        value = "https://apgiframework.com"
+        value = "https://apgiframework.com,https://www.apgiframework.com"
       }
       env {
         name  = "TRIAL_EVENTS_BUCKET"

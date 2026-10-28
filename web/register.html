@@ -531,6 +531,9 @@
     </div>
 
     <script>
+        const API_BASE = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+            ? 'http://127.0.0.1:8000'
+            : 'https://api.apgiframework.com';
         function nextStep(stepId) {
             document.querySelectorAll('.step').forEach(el => {
                 el.classList.remove('active');
@@ -565,7 +568,7 @@
                     password: pwd 
                 };
                 
-                const response = await fetch('http://127.0.0.1:8000/v1/users/register', {
+                const response = await fetch(`${API_BASE}/v1/users/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
