@@ -30,6 +30,7 @@ from app.database.models import (
     ParticipantSession,
     TrialEvent,
 )
+from app.services.version_lattice import build_stamps, validate_stamps
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,18 @@ def score_session(db: Session, participant_session_id: str) -> Optional[Particip
 
     scores = compute_session_scores(db, participant_session)
     active_model = db.query(ModelVersion).filter(ModelVersion.is_active.is_(True)).first()
+    scores["stamps"] = validate_stamps(
+        build_stamps(
+            battery_version=scores.get("battery_version"),
+            model_id=str(active_model.model_version_id) if active_model is not None else None,
+            model_version=str(active_model.version) if active_model is not None else None,
+            feature_version=(
+                str(active_model.feature_version)
+                if active_model is not None and active_model.feature_version
+                else None
+            ),
+        )
+    )
 
     participant_session.scores = scores  # type: ignore[assignment]
     if active_model is not None:
