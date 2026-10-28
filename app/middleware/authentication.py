@@ -73,6 +73,10 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         "/v1/payments/webhook",
         "/v1/meta",
         "/v1/dataset-card",
+        "/v1/explorer/config",
+        "/v1/consent-texts",
+        "/v1/instruments/apgi-explorer-35",
+        "/v1/instruments/apgi-explorer-35/score-allowlist",
     }
 
     _redis_client = None

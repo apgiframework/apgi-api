@@ -163,7 +163,12 @@ class TestParticipantAndConsent:
             "participant_id"
         ]
         status_resp = participant_client.get(f"/v1/participants/{participant_id}/consents/status")
-        assert status_resp.json() == {"research_participation": False, "data_sharing": False}
+        assert status_resp.json() == {
+            "product_use": False,
+            "research_participation": False,
+            "data_sharing": False,
+            "recontact": False,
+        }
 
     def test_grant_and_revoke_consent(self, participant_client: TestClient) -> None:
         participant_id = participant_client.post("/v1/participants", json={}).json()[

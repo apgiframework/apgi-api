@@ -1,0 +1,41 @@
+{
+  "_note": "DRAFT texts pending S1-PRV-06 (ethics/legal review). status must stay 'draft' until approved; research mode stays off while any purpose is a draft.",
+  "texts": [
+    {
+      "consent_type": "product_use",
+      "version": "1.0",
+      "locale": "en",
+      "status": "draft",
+      "required_for_research": true,
+      "title": "Using the APGI Explorer service",
+      "body": "To sync your Explorer session with the APGI service, we process your account identifier, the answers you give and when you give them. This is needed to run the service and show you your own result. It does not by itself make you a research participant. You can withdraw at any time in Explorer settings."
+    },
+    {
+      "consent_type": "research_participation",
+      "version": "1.0",
+      "locale": "en",
+      "status": "draft",
+      "required_for_research": true,
+      "title": "Taking part in research",
+      "body": "I agree that my answers, response timings and device information from Explorer may be used in the APGI research study. Taking part is voluntary. I can withdraw at any time without giving a reason; data already analysed in aggregate may not be removable."
+    },
+    {
+      "consent_type": "data_sharing",
+      "version": "1.0",
+      "locale": "en",
+      "status": "draft",
+      "required_for_research": false,
+      "title": "Sharing de-identified data",
+      "body": "I agree that a de-identified copy of my research data may be shared with other researchers in a public or controlled-access repository. Direct identifiers are never included."
+    },
+    {
+      "consent_type": "recontact",
+      "version": "1.0",
+      "locale": "en",
+      "status": "draft",
+      "required_for_research": false,
+      "title": "Being contacted about future studies",
+      "body": "I agree that the APGI research team may contact me about follow-up or future studies using the contact details I provided. I can decline without affecting my participation."
+    }
+  ]
+}
