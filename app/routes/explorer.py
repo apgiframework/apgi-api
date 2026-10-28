@@ -15,7 +15,12 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.connection import get_db
-from app.database.models import ConsentType, ParticipantSession, ParticipantSessionStatus, TrialEvent
+from app.database.models import (
+    ConsentType,
+    ParticipantSession,
+    ParticipantSessionStatus,
+    TrialEvent,
+)
 from app.models.schemas import TokenPayload
 from app.routes.trials import _check_session_access, _get_session_or_404
 from app.schemas.explorer import (
@@ -93,8 +98,14 @@ async def get_score_allowlist() -> ScoreAllowlistResponse:
     )
 
 
-def _ack(event_id: str, seq_no: int, state: str) -> EventAck:
-    return EventAck(event_id=event_id, seq_no=seq_no, status=state, server_verified=True)  # type: ignore[arg-type]
+def _ack(event_id: str, seq_no: int, payload_sha256: str, state: str) -> EventAck:
+    return EventAck(
+        event_id=event_id,
+        seq_no=seq_no,
+        payload_sha256=payload_sha256,
+        status=state,  # type: ignore[arg-type]
+        server_verified=True,
+    )
 
 
 @router.post(
@@ -149,7 +160,9 @@ async def upload_journal_events(
                 and existing.seq_no == event.seq_no
                 and existing.payload_sha256 == event.payload_sha256
             ):
-                acks.append(_ack(event.event_id, event.seq_no, "duplicate"))
+                acks.append(
+                    _ack(event.event_id, event.seq_no, str(existing.payload_sha256), "duplicate")
+                )
                 continue
             db.rollback()
             raise HTTPException(
@@ -190,7 +203,7 @@ async def upload_journal_events(
             raise HTTPException(
                 status.HTTP_409_CONFLICT, detail="Concurrent upload of the same event; retry"
             )
-        acks.append(_ack(event.event_id, event.seq_no, "accepted"))
+        acks.append(_ack(event.event_id, event.seq_no, event.payload_sha256, "accepted"))
 
     if session.status == ParticipantSessionStatus.SCHEDULED:
         from datetime import datetime, timezone

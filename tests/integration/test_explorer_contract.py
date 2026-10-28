@@ -37,7 +37,10 @@ def _session(db_engine: Any, consents: tuple[str, ...] = PURPOSES) -> tuple[Test
     ).json()["battery_id"]
     c = _client(db_engine, ["viewer"], "u1")
     pid = c.post("/v1/participants", json={}).json()["participant_id"]
-    for purpose in ("research_participation", *[p for p in consents if p != "research_participation"]):
+    for purpose in (
+        "research_participation",
+        *[p for p in consents if p != "research_participation"],
+    ):
         if purpose in consents:
             resp = c.post(f"/v1/participants/{pid}/consents", json={"consent_type": purpose})
             assert resp.status_code == 201, resp.text
@@ -87,6 +90,9 @@ def test_upload_is_idempotent_and_acknowledged(db_engine: Any) -> None:
     first = c.post(f"/v1/participant-sessions/{psid}/events", json=batch).json()["acks"]
     assert [a["status"] for a in first] == ["accepted", "accepted"]
     assert all(a["server_verified"] for a in first)
+    assert [a["payload_sha256"] for a in first] == [
+        e["payload_sha256"] for e in batch["events"]  # type: ignore[attr-defined]
+    ]
     again = c.post(f"/v1/participant-sessions/{psid}/events", json=batch).json()["acks"]
     assert [a["status"] for a in again] == ["duplicate", "duplicate"]
 

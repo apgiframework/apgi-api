@@ -20,9 +20,18 @@ _ITEM = re.compile(
     r"QuizQuestion\(\s*id:\s*(\d+),\s*text:\s*(\"(?:[^\"\\]|\\.)*\"),\s*options:\s*\[(.*?)\],\s*parameter:",
     re.S,
 )
-_OPTION = re.compile(r"QuizOption\(\s*text:\s*(\"(?:[^\"\\]|\\.)*\")\s*,\s*note:\s*\"(?:[^\"\\]|\\.)*\"\s*,\s*value:\s*(\d)\s*\)", re.S)
+_OPTION = re.compile(
+    r"QuizOption\(\s*text:\s*(\"(?:[^\"\\]|\\.)*\")\s*,\s*note:\s*\"(?:[^\"\\]|\\.)*\"\s*,\s*value:\s*(\d)\s*\)",
+    re.S,
+)
 _SUBSCALES = [
-    "epsilon", "precision", "threshold", "somatic", "interactions", "temporal", "environment",
+    "epsilon",
+    "precision",
+    "threshold",
+    "somatic",
+    "interactions",
+    "temporal",
+    "environment",
 ]
 
 
@@ -45,7 +54,12 @@ def main(source: Path) -> None:
     items.sort(key=lambda i: i["item_id"])
     assert [i["item_id"] for i in items] == list(range(1, 36)), "expected items 1..35"
     assert all([o["value"] for o in i["options"]] == [1, 2, 3, 4] for i in items)
-    bank = {"instrument_id": "apgi-explorer-35", "bank_version": "1.0.0", "locale": "en", "items": items}
+    bank = {
+        "instrument_id": "apgi-explorer-35",
+        "bank_version": "1.0.0",
+        "locale": "en",
+        "items": items,
+    }
     OUT.write_text(json.dumps(bank, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"wrote {OUT} ({len(items)} items)")
 

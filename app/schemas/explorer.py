@@ -90,6 +90,7 @@ class JournalEventBatch(BaseModel):
 class EventAck(BaseModel):
     event_id: str
     seq_no: int
+    payload_sha256: str
     status: Literal["accepted", "duplicate"]
     server_verified: bool
 
