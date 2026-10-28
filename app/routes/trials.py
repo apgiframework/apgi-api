@@ -22,7 +22,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timezone
-from typing import List
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
@@ -244,14 +244,14 @@ async def ingest_trial_events(
 
     require_consent(db, str(session.participant_id), ConsentType.RESEARCH_PARTICIPATION)
 
-    existing_by_id = {
+    existing_by_id: Dict[Any, Any] = {
         t.event_id: t
         for t in db.query(TrialEvent).filter(
             TrialEvent.participant_session_id == participant_session_id,
             TrialEvent.event_id.in_([e.event_id for e in request.events]),
         )
     }
-    seq_owner = {
+    seq_owner: Dict[Any, Any] = {
         t.seq_no: t.event_id
         for t in db.query(TrialEvent).filter(
             TrialEvent.participant_session_id == participant_session_id,
@@ -260,8 +260,8 @@ async def ingest_trial_events(
     }
 
     # Validate the whole batch before storing anything: a conflict stores nothing.
-    plan: List[tuple] = []
-    batch_ids: dict = {}
+    plan: List[Tuple[Any, str, Optional[TrialEvent]]] = []
+    batch_ids: Dict[Any, Any] = {}
     for event in request.events:
         digest = event_payload_sha256(event)
         prior = existing_by_id.get(event.event_id)
@@ -287,10 +287,10 @@ async def ingest_trial_events(
         plan.append((event, digest, None))
 
     created: List[TrialEvent] = []
-    seen_new: set = set()
+    seen_new: Set[str] = set()
     for event, digest, prior in plan:
         if prior is not None:
-            prior.duplicate = True  # type: ignore[attr-defined]
+            prior.duplicate = True
             created.append(prior)
             continue
         if event.event_id in seen_new:
@@ -333,7 +333,7 @@ async def ingest_trial_events(
     for trial in created:
         duplicate = getattr(trial, "duplicate", False)
         db.refresh(trial)
-        trial.duplicate = duplicate  # type: ignore[attr-defined]
+        trial.duplicate = duplicate
 
     return created
 
