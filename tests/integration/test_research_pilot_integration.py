@@ -265,8 +265,22 @@ class TestTrialIngestionRequiresConsent:
             f"/v1/participant-sessions/{participant_session_id}/trials",
             json={
                 "events": [
-                    {"task_type": "stroop", "trial_index": 0, "rt_ms": 512.3, "correct": True},
-                    {"task_type": "stroop", "trial_index": 1, "rt_ms": 480.1, "correct": False},
+                    {
+                        "event_id": "e0",
+                        "seq_no": 0,
+                        "task_type": "stroop",
+                        "trial_index": 0,
+                        "rt_ms": 512.3,
+                        "correct": True,
+                    },
+                    {
+                        "event_id": "e1",
+                        "seq_no": 1,
+                        "task_type": "stroop",
+                        "trial_index": 1,
+                        "rt_ms": 480.1,
+                        "correct": False,
+                    },
                 ]
             },
         )
@@ -276,7 +290,17 @@ class TestTrialIngestionRequiresConsent:
         # Duplicate (participant_session_id, task_type, trial_index) is rejected at the DB layer.
         dup_resp = participant_client.post(
             f"/v1/participant-sessions/{participant_session_id}/trials",
-            json={"events": [{"task_type": "stroop", "trial_index": 0, "rt_ms": 500.0}]},
+            json={
+                "events": [
+                    {
+                        "event_id": "e9",
+                        "seq_no": 2,
+                        "task_type": "stroop",
+                        "trial_index": 0,
+                        "rt_ms": 500.0,
+                    }
+                ]
+            },
         )
         assert dup_resp.status_code >= 400
 
@@ -294,6 +318,56 @@ class TestTrialIngestionRequiresConsent:
         )
         assert second_complete.status_code == 200
         assert second_complete.json()["trial_count"] == 2
+
+    def test_idempotent_ingestion_conflicts_and_gaps(
+        self, researcher_client: TestClient, participant_client: TestClient
+    ) -> None:
+        study_id, battery_id = _create_study_and_battery(researcher_client)
+        pid = participant_client.post("/v1/participants", json={}).json()["participant_id"]
+        participant_client.post(
+            f"/v1/participants/{pid}/consents", json={"consent_type": "research_participation"}
+        )
+        sid = participant_client.post(
+            "/v1/participant-sessions",
+            json={"participant_id": pid, "study_id": study_id, "battery_id": battery_id},
+        ).json()["participant_session_id"]
+        url = f"/v1/participant-sessions/{sid}/trials"
+
+        def ev(event_id: str, seq: int, idx: int, rt: float = 500.0) -> dict:
+            return {
+                "event_id": event_id,
+                "seq_no": seq,
+                "task_type": "stroop",
+                "trial_index": idx,
+                "rt_ms": rt,
+            }
+
+        first = participant_client.post(url, json={"events": [ev("a", 0, 0), ev("c", 2, 2)]})
+        assert first.status_code == 201
+        original_id = first.json()[0]["trial_event_id"]
+
+        # Same event_id + same payload: acknowledged as a duplicate with the original receipt.
+        retry = participant_client.post(url, json={"events": [ev("a", 0, 0)]})
+        assert retry.status_code == 201
+        assert retry.json()[0]["duplicate"] is True
+        assert retry.json()[0]["trial_event_id"] == original_id
+
+        # Same event_id + different payload: 409, and nothing from the batch is stored.
+        conflict = participant_client.post(
+            url, json={"events": [ev("b", 1, 1), ev("a", 0, 0, rt=999.0)]}
+        )
+        assert conflict.status_code == 409
+
+        # Seq 1 is still missing (the conflicting batch stored nothing): complete reports it.
+        incomplete = participant_client.post(f"/v1/participant-sessions/{sid}/complete").json()
+        assert incomplete["awaiting_inputs"] is True
+        assert incomplete["missing_seq_nos"] == [1]
+        assert incomplete["status"] != "completed"
+
+        # Out-of-order arrival is retained; once the gap fills, completion succeeds.
+        assert participant_client.post(url, json={"events": [ev("b", 1, 1)]}).status_code == 201
+        done = participant_client.post(f"/v1/participant-sessions/{sid}/complete").json()
+        assert done["status"] == "completed" and done["trial_count"] == 3
 
     def test_second_session_gets_incremented_index(
         self, researcher_client: TestClient, participant_client: TestClient

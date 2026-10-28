@@ -1315,6 +1315,9 @@ class TrialEvent(Base):  # type: ignore[misc, valid-type]
     raw_gcs_object = Column(
         String(500), nullable=True, comment="Object path in the restricted raw-trial-events bucket"
     )
+    timing_provenance = Column(
+        String(30), nullable=True, comment="Where rt_ms came from; never HTTP request time"
+    )
     received_at = Column(
         DateTime(timezone=True),
         nullable=False,

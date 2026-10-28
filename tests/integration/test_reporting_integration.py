@@ -95,7 +95,14 @@ def _run_one_session(
     participant_session_id = session_resp.json()["participant_session_id"]
 
     events = [
-        {"task_type": "stroop", "trial_index": i, "rt_ms": 400 + i * 5, "correct": correct}
+        {
+            "event_id": f"e{i}",
+            "seq_no": i,
+            "task_type": "stroop",
+            "trial_index": i,
+            "rt_ms": 400 + i * 5,
+            "correct": correct,
+        }
         for i, correct in enumerate(accuracy_pattern)
     ]
     ingest_resp = participant.post(
