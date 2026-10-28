@@ -52,6 +52,8 @@ async def get_norms(
     if battery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Battery not found")
 
+    # Only screened, norm-eligible sessions (tier A/B, no bot/attention failures,
+    # first session per participant per battery version) contribute.
     sessions = (
         db.query(ParticipantSession)
         .filter(
@@ -59,6 +61,7 @@ async def get_norms(
             ParticipantSession.battery_id == battery_id,
             ParticipantSession.status == ParticipantSessionStatus.COMPLETED,
             ParticipantSession.scores.isnot(None),
+            ParticipantSession.norm_eligible.is_(True),
         )
         .all()
     )

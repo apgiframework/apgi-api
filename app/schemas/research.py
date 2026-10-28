@@ -147,6 +147,11 @@ class ParticipantSessionCreateRequest(BaseModel):
     participant_id: str
     study_id: str
     battery_id: str
+    device_fingerprint: Optional[str] = Field(
+        None,
+        max_length=512,
+        description="Client device fingerprint; stored only as a peppered hash",
+    )
 
 
 class ParticipantSessionResponse(BaseModel):
@@ -161,6 +166,10 @@ class ParticipantSessionResponse(BaseModel):
     scores: Optional[dict[str, Any]] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    device_tier: Optional[str] = None
+    tier_config_version: Optional[str] = None
+    norm_eligible: Optional[bool] = None
+    expected_form_label: Optional[str] = None
     release_state: str
 
 
@@ -206,3 +215,36 @@ class SessionCompletionResponse(BaseModel):
     status: ParticipantSessionStatus
     trial_count: int
     completed_at: datetime
+
+
+class SessionQualityRequest(BaseModel):
+    """Client-side device/timing telemetry and validity signals for one
+    session, submitted before completion (tracker S3-BAT-01.4/.5/.6, S3-SCR-01)."""
+
+    model_config = _FORBID_EXTRA
+
+    tier_config_version: str = Field(..., max_length=40)
+    timing_errors_ms: list[float] = Field(
+        default_factory=list, max_length=20000, description="Per-trial timing errors"
+    )
+    dropped_frame_fraction: float = Field(0.0, ge=0, le=1)
+    fullscreen: bool = False
+    is_mobile: bool = False
+    visibility_changes: int = Field(0, ge=0)
+    attention_checks_passed: int = Field(0, ge=0)
+    attention_checks_failed: int = Field(0, ge=0)
+    questionnaire_responses: Optional[list[int]] = Field(None, max_length=500)
+    honeypot: Optional[str] = Field(None, max_length=200)
+    webdriver: bool = False
+    completion_seconds: Optional[float] = Field(None, ge=0)
+
+
+class ExclusionReportResponse(BaseModel):
+    study_id: str
+    battery_id: Optional[str] = None
+    n_screened_sessions: int
+    n_excluded_from_norms: int
+    exclusion_rate: Optional[float] = None
+    by_reason: dict[str, int]
+    by_device_tier: dict[str, int]
+    tier_config_version: str

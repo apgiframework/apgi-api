@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session
 from app.database.connection import get_db
 from app.database.models import Study
 from app.models.schemas import ErrorResponse, TokenPayload
-from app.schemas.research import StudyCreateRequest, StudyResponse
+from app.schemas.research import ExclusionReportResponse, StudyCreateRequest, StudyResponse
 from app.services.authorization import Role, log_audit_event, require_any_role
+from app.services.screening import exclusion_report
 
 router = APIRouter(
     prefix="/v1/studies",
@@ -63,3 +64,19 @@ async def get_study(study_id: str, db: Session = Depends(get_db)) -> Study:
     if study is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Study not found")
     return study
+
+
+@router.get(
+    "/{study_id}/exclusion-report",
+    response_model=ExclusionReportResponse,
+    summary="Exclusion rates for the dataset card",
+)
+async def get_exclusion_report(
+    study_id: str,
+    battery_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _current_user: TokenPayload = Depends(require_any_role([Role.ADMIN, Role.RESEARCHER])),
+) -> dict[str, Any]:
+    if db.query(Study).filter(Study.study_id == study_id).first() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Study not found")
+    return exclusion_report(db, study_id, battery_id)

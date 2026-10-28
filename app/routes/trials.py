@@ -41,12 +41,23 @@ from app.schemas.research import (
     ParticipantSessionCreateRequest,
     ParticipantSessionResponse,
     SessionCompletionResponse,
+    SessionQualityRequest,
     TrialEventBatchIngestRequest,
     TrialEventResponse,
 )
 from app.services.authorization import Role, get_current_user, has_any_role, log_audit_event
 from app.services.consent import require_consent
 from app.services.rls import set_rls_context
+from app.services.screening import (
+    TIER_CONFIG,
+    assign_tier,
+    email_hash_for,
+    expected_form_label,
+    get_or_assign_form_order,
+    hash_identifier,
+    screen_session,
+    timing_error_distribution,
+)
 from app.services.trial_storage import write_raw_trial_event
 
 logger = logging.getLogger(__name__)
@@ -147,10 +158,16 @@ async def create_participant_session(
         session_index=next_index,
         status=ParticipantSessionStatus.IN_PROGRESS,
         started_at=datetime.now(timezone.utc),
+        device_fingerprint_hash=(
+            hash_identifier(request.device_fingerprint) if request.device_fingerprint else None
+        ),
+        email_hash=email_hash_for(participant),
     )
     db.add(session)
+    form_order = get_or_assign_form_order(db, request.participant_id, request.study_id)
     db.commit()
     db.refresh(session)
+    session.expected_form_label = expected_form_label(form_order, next_index)
 
     log_audit_event(
         db=db,
@@ -221,6 +238,60 @@ async def ingest_trial_events(
 
 
 @router.post(
+    "/v1/participant-sessions/{participant_session_id}/quality",
+    response_model=ParticipantSessionResponse,
+    summary="Submit device telemetry and validity signals",
+)
+async def submit_session_quality(
+    participant_session_id: str,
+    request: SessionQualityRequest,
+    db: Session = Depends(get_db),
+    current_user: TokenPayload = Depends(get_current_user),
+) -> ParticipantSession:
+    set_rls_context(db, current_user)
+    session = _get_session_or_404(db, participant_session_id)
+    _check_session_access(db, session, current_user)
+
+    if request.tier_config_version != TIER_CONFIG["version"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Unknown tier_config_version; server is on {TIER_CONFIG['version']}",
+        )
+
+    distribution = timing_error_distribution(request.timing_errors_ms)
+    telemetry = {
+        "timing_error": distribution,
+        "dropped_frame_fraction": request.dropped_frame_fraction,
+        "fullscreen": request.fullscreen,
+        "is_mobile": request.is_mobile,
+        "visibility_changes": request.visibility_changes,
+    }
+    tier, _ = assign_tier(telemetry, request.attention_checks_failed)
+    session.device_tier = tier  # type: ignore[assignment]
+    session.tier_config_version = request.tier_config_version  # type: ignore[assignment]
+    session.timing_error_distribution = distribution  # type: ignore[assignment]
+    db.commit()
+
+    screen_session(
+        db,
+        session,
+        questionnaire=request.questionnaire_responses,
+        attention_checks={
+            "passed": request.attention_checks_passed,
+            "failed": request.attention_checks_failed,
+        },
+        bot_signals={
+            "honeypot": request.honeypot,
+            "completion_seconds": request.completion_seconds,
+            "webdriver": request.webdriver,
+        },
+        telemetry=telemetry,
+    )
+    db.refresh(session)
+    return session
+
+
+@router.post(
     "/v1/participant-sessions/{participant_session_id}/complete",
     response_model=SessionCompletionResponse,
     summary="Session completion contract",
@@ -247,6 +318,10 @@ async def complete_participant_session(
         session.status = ParticipantSessionStatus.COMPLETED
         session.completed_at = datetime.now(timezone.utc)  # type: ignore[assignment]
         db.commit()
+        if session.screening is None:
+            # Never blocks completion: a session that skipped the quality
+            # step is recorded as unscreened and kept out of norms.
+            screen_session(db, session)
         db.refresh(session)
 
         log_audit_event(

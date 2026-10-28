@@ -103,6 +103,18 @@ def _run_one_session(
     )
     assert ingest_resp.status_code == 201, ingest_resp.text
 
+    quality_resp = participant.post(
+        f"/v1/participant-sessions/{participant_session_id}/quality",
+        json={
+            "tier_config_version": "tier_config-1.0.0",
+            "timing_errors_ms": [1.0, 2.0, 3.0],
+            "fullscreen": True,
+            "attention_checks_passed": 2,
+        },
+    )
+    assert quality_resp.status_code == 200, quality_resp.text
+    assert quality_resp.json()["device_tier"] == "A"
+
     complete_resp = participant.post(f"/v1/participant-sessions/{participant_session_id}/complete")
     assert complete_resp.status_code == 200, complete_resp.text
 

@@ -3,6 +3,24 @@
 All notable changes to the APGI System API are recorded here. Versions follow
 the apgiframework/apgi-framework release they ship alongside.
 
+## [Unreleased]
+
+- Server-side effort/fraud/validity screening (`app/services/screening.py`):
+  fast responses, invariant responding, straight-lining/zig-zagging, failed
+  attention checks, form-layer bot signals, and duplicate device-fingerprint /
+  email-hash flags (flag, never block). Outcomes are stored on the session
+  (`screening`, `norm_eligible`); `POST /v1/participant-sessions/{id}/quality`
+  submits telemetry; sessions completed without it are kept out of norms.
+- Versioned `tier_config` device tiers (A/B/C) stored per session together with
+  `tier_config_version` and the per-session timing-error distribution.
+- Norms count only norm-eligible sessions: one per participant per battery
+  version, no tier C, no bot or failed-attention sessions.
+- `GET /v1/studies/{id}/exclusion-report` for the dataset card.
+- Parallel-form order is counterbalanced (Williams square) and persisted at
+  enrolment (`study_enrollments.form_order`); sessions report
+  `expected_form_label`. Migration `add_session_screening_and_form_order`.
+- `faker` added to `requirements-dev.txt` (unit tests import it).
+
 ## [1.1.0] — 2026-10-17
 
 Aligned with apgi-framework 1.1.0 (protocol specification v1.1.0).

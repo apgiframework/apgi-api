@@ -1003,6 +1003,9 @@ class StudyEnrollment(Base):  # type: ignore[misc, valid-type]
         server_default=func.now(),
         comment="Enrollment timestamp",
     )
+    form_order = Column(
+        JSON, nullable=True, comment="Counterbalanced parallel-form order fixed at enrolment"
+    )
 
     participant = relationship("Participant", back_populates="enrollments")
     study = relationship("Study", back_populates="enrollments")
@@ -1160,6 +1163,27 @@ class ParticipantSession(Base):  # type: ignore[misc, valid-type]
         index=True,
     )
     scores = Column(JSON, nullable=True, comment="Computed per-index scores once scoring completes")
+    device_tier = Column(
+        String(1), nullable=True, index=True, comment="Device quality tier A/B/C (tier_config)"
+    )
+    tier_config_version = Column(
+        String(40), nullable=True, comment="tier_config version used to assign device_tier"
+    )
+    timing_error_distribution = Column(
+        JSON, nullable=True, comment="Per-session timing-error distribution (not only the mean)"
+    )
+    device_fingerprint_hash = Column(
+        String(64), nullable=True, index=True, comment="Peppered hash of the device fingerprint"
+    )
+    email_hash = Column(
+        String(64), nullable=True, index=True, comment="Peppered hash of the contact email"
+    )
+    screening = Column(
+        JSON, nullable=True, comment="Effort/fraud/validity screening outcome (flags + counts)"
+    )
+    norm_eligible = Column(
+        Boolean, nullable=True, index=True, comment="Whether this session may contribute to norms"
+    )
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
