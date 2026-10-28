@@ -55,14 +55,18 @@ def sha256_hex(text: str) -> str:
 
 @lru_cache(maxsize=1)
 def item_bank() -> dict[str, Any]:
-    bank = json.loads((_DATA / "instruments" / f"{INSTRUMENT_ID}.json").read_text("utf-8"))
+    bank: dict[str, Any] = json.loads(
+        (_DATA / "instruments" / f"{INSTRUMENT_ID}.json").read_text("utf-8")
+    )
     bank["sha256"] = sha256_hex(canonical_json({k: v for k, v in bank.items() if k != "sha256"}))
     return bank
 
 
 @lru_cache(maxsize=1)
 def consent_texts() -> list[dict[str, Any]]:
-    texts = json.loads((_DATA / "consent_texts.json").read_text("utf-8"))["texts"]
+    texts: list[dict[str, Any]] = json.loads((_DATA / "consent_texts.json").read_text("utf-8"))[
+        "texts"
+    ]
     for text in texts:
         text["sha256"] = sha256_hex(text["body"])
     return texts

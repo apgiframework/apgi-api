@@ -238,7 +238,7 @@ async def get_explorer_result(
         .order_by(TrialEvent.seq_no)
         .all()
     )
-    answers = {int(r.response_value["item_id"]): int(r.response_value["value"]) for r in rows}  # type: ignore[index]
+    answers = {int(r.response_value["item_id"]): int(r.response_value["value"]) for r in rows}
     if set(answers) != contract.ITEM_IDS:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
