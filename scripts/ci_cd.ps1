@@ -335,7 +335,7 @@ function Invoke-HealthChecks {
 
     $url = switch ($Env) {
         "staging" { "http://localhost:8000" }
-        "production" { $env:PRODUCTION_URL ?? "http://api.apgi.com" }
+        "production" { $env:PRODUCTION_URL ?? "https://api.apgiframework.com" }
     }
 
     Write-Info "Running health checks for $Env environment..."

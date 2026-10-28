@@ -583,13 +583,16 @@
     </div>
 
     <script>
+        const API_BASE = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+            ? 'http://127.0.0.1:8000'
+            : 'https://api.apgiframework.com';
         let stripe;
         let elements;
 
         // Initialize Stripe right away
         async function initStripe() {
             try {
-                const response = await fetch("http://127.0.0.1:8000/v1/payments/create-intent", {
+                const response = await fetch(`${API_BASE}/v1/payments/create-intent`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ items: [{ id: "cognitive-engine-v2" }] }),

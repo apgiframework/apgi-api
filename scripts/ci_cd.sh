@@ -357,7 +357,7 @@ run_health_checks() {
             url="http://localhost:8000"
             ;;
         production)
-            url="${PRODUCTION_URL:-http://api.apgi.com}"
+            url="${PRODUCTION_URL:-https://api.apgiframework.com}"
             ;;
     esac
 

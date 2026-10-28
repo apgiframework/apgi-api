@@ -76,7 +76,7 @@ for key in old_keys:
 "
 
 # Rotate individual API key
-curl -X POST https://api.apgi.com/v1/api-keys/{key_id}/rotate \
+curl -X POST https://api.apgiframework.com/v1/api-keys/{key_id}/rotate \
   -H "Authorization: Bearer {admin_token}"
 
 # Notify key owners
@@ -117,7 +117,7 @@ sleep 30
 kubectl rollout restart deployment/apgi-api
 
 # Verify new tokens work
-curl -H "Authorization: Bearer {test_token}" https://api.apgi.com/v1/users/me
+curl -H "Authorization: Bearer {test_token}" https://api.apgiframework.com/v1/users/me
 ```
 
 ### Certificate Rotation
@@ -177,7 +177,7 @@ from app.database.connection import get_db
 
 ```bash
 # Verify application health
-curl -f https://api.apgi.com/health
+curl -f https://api.apgiframework.com/health
 
 # Check error rates
 kubectl logs --since=1h deployment/apgi-api | grep ERROR | wc -l
