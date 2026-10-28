@@ -122,6 +122,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     logger.info("Application starting up", component="lifecycle")
 
+    # Refuse to start without a valid exposure-gate allow-list (PR 2b).
+    from app.modules.scoring.exposure import load_gate_table
+
+    load_gate_table()
+
     # Skip dependency validation in test mode or when TEST_MODE is enabled.
     if getattr(app.state, "test_mode", False) or os.environ.get("TEST_MODE") == "true":
         logger.info("Skipping dependency check in test mode", component="lifecycle")
@@ -419,6 +424,11 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
     app.include_router(updates.router)
     app.include_router(ops.router)
     app.include_router(console.router)
+
+    # Dev-only routes (/v1/users/create-default, /v1/profiling/*) never ship to production.
+    if settings.environment != "production":
+        app.include_router(users.dev_router)
+        app.include_router(metrics.dev_router)
 
     # Mount static files for web UI
     web_dir = os.path.join(os.path.dirname(__file__), "..", "web")

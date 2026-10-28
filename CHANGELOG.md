@@ -36,6 +36,18 @@ the apgiframework/apgi-framework release they ship alongside.
   enrolment (`study_enrollments.form_order`); sessions report
   `expected_form_label`. Migration `add_session_screening_and_form_order`.
 - `faker` added to `requirements-dev.txt` (unit tests import it).
+- Audit log is hash-chained and append-only: `audit_logs` gains `chain_seq`,
+  `prev_record_sha256` and `signing_key_version` (`AUDIT_SIGNING_KEY_VERSION`);
+  signatures bind the predecessor hash; `verify_chain()` detects tampering and
+  deletion; a Postgres trigger rejects UPDATE/DELETE (migration `add_audit_hash_chain`).
+- Exposure gate (`app/modules/scoring/exposure.py`, `gate_table.yaml`): the allow-list
+  is loaded at start-up (the service refuses to start without it); `ExposureGate`
+  raises `GateViolation` on any non-allow-listed outbound field. The five latent
+  routes (`/state-vector`, `/interoception`, `/prediction-errors`,
+  `/somatic-markers`, `/ignition-history`) now return gate state only, never values.
+- `/v1/users/create-default` and `/v1/profiling/*` are no longer mounted in production.
+- Canonical API host `https://api.apgiframework.com`: client docs default to it, and
+  `web/register.html` / `web/checkout.html` no longer hard-code `127.0.0.1:8000`.
 
 ## [1.1.0] — 2026-10-17
 

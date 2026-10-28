@@ -31,7 +31,7 @@ variable "github_deploy_ref" {
 }
 
 variable "api_domain" {
-  description = "Custom domain to map to Cloud Run (production only). Leave null for research."
+  description = "Custom domain to map to Cloud Run (production only: api.apgiframework.com). Leave null for research."
   type        = string
   default     = null
 }

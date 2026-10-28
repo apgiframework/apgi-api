@@ -21,6 +21,8 @@ from app.services.cache_service import get_cache_service
 from app.services.profiling_service import ProfilingService
 
 router = APIRouter(prefix="/v1", tags=["Metrics"])
+# Development-only profiling routes; not mounted in production (see app.main).
+dev_router = APIRouter(prefix="/v1", tags=["Metrics"])
 
 logger = logging.getLogger(__name__)
 
@@ -351,7 +353,7 @@ async def get_dashboard_html(
         )
 
 
-@router.post(
+@dev_router.post(
     "/profiling/memory/start",
     summary="Start memory tracing",
     description="Start collecting detailed memory usage information",
@@ -377,7 +379,7 @@ async def start_memory_tracing(
         )
 
 
-@router.post(
+@dev_router.post(
     "/profiling/memory/stop",
     summary="Stop memory tracing",
     description="Stop collecting detailed memory usage information",
@@ -403,7 +405,7 @@ async def stop_memory_tracing(
         )
 
 
-@router.get(
+@dev_router.get(
     "/profiling/memory",
     summary="Get memory usage snapshot",
     description="Retrieve current memory usage and allocation details",
@@ -426,7 +428,7 @@ async def get_memory_snapshot(service: ProfilingService = Depends(get_profiling_
         )
 
 
-@router.get(
+@dev_router.get(
     "/profiling/system",
     summary="Get system performance metrics",
     description="Retrieve current system performance metrics (CPU, memory, threads)",
@@ -449,7 +451,7 @@ async def get_system_performance(service: ProfilingService = Depends(get_profili
         )
 
 
-@router.get(
+@dev_router.get(
     "/profiling/history",
     summary="Get performance history",
     description="Retrieve historical performance metrics for analysis",
@@ -483,7 +485,7 @@ async def get_performance_history(
         )
 
 
-@router.get(
+@dev_router.get(
     "/profiling/analysis",
     summary="Get bottleneck analysis",
     description="Analyze performance data to identify bottlenecks and recommendations",

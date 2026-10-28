@@ -63,6 +63,9 @@ router = APIRouter(
     },
 )
 
+# Development-only; not mounted in production (see app.main).
+dev_router = APIRouter(prefix="/v1/users", tags=["User Management"])
+
 
 @router.post(
     "/register",
@@ -176,7 +179,7 @@ async def verify_email(
         )
 
 
-@router.post(
+@dev_router.post(
     "/create-default",
     response_model=UserCreateResponse,
     status_code=status.HTTP_201_CREATED,

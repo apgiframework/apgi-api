@@ -18,7 +18,7 @@ from app.database.connection import get_db
 from app.database.models import AuditLog
 from app.exceptions import AuthorizationError, InvalidTokenError
 from app.models.schemas import TokenPayload as TokenPayload
-from app.services.audit_signing import sign_audit_entry
+from app.services.audit_signing import GENESIS_HASH, record_sha256, sign_audit_entry
 from app.services.auth_manager import AuthManager
 
 logger = logging.getLogger(__name__)
@@ -536,9 +536,42 @@ def log_audit_event(
     try:
         audit_id = str(uuid.uuid4())
         signature: Optional[str] = None
+        chain_seq: Optional[int] = None
+        prev_hash: Optional[str] = None
+        key_version: Optional[str] = None
         if settings.audit_signing_key:
+            last = (
+                db.query(AuditLog)
+                .filter(AuditLog.chain_seq.isnot(None))
+                .order_by(AuditLog.chain_seq.desc())
+                .with_for_update()
+                .first()
+            )
+            if last is None:
+                chain_seq, prev_hash = 1, GENESIS_HASH
+            else:
+                chain_seq = int(last.chain_seq) + 1
+                prev_hash = record_sha256(
+                    last.audit_id,  # type: ignore[arg-type]
+                    last.user_id,  # type: ignore[arg-type]
+                    last.action,  # type: ignore[arg-type]
+                    last.resource_type,  # type: ignore[arg-type]
+                    last.resource_id,  # type: ignore[arg-type]
+                    last.status,  # type: ignore[arg-type]
+                    last.details,  # type: ignore[arg-type]
+                    last.prev_record_sha256,  # type: ignore[arg-type]
+                    last.signature,  # type: ignore[arg-type]
+                )
+            key_version = settings.audit_signing_key_version
             signature = sign_audit_entry(
-                audit_id, user_id, action, resource_type, resource_id, status, details
+                audit_id,
+                user_id,
+                action,
+                resource_type,
+                resource_id,
+                status,
+                details or {},
+                prev_hash,
             )
         audit_log = AuditLog(
             audit_id=audit_id,
@@ -551,6 +584,9 @@ def log_audit_event(
             user_agent=user_agent,
             status=status,
             signature=signature,
+            chain_seq=chain_seq,
+            prev_record_sha256=prev_hash,
+            signing_key_version=key_version,
         )
         db.add(audit_log)
         db.commit()

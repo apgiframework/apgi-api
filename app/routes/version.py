@@ -15,6 +15,8 @@ from fastapi.responses import JSONResponse
 
 from app import __version__
 
+CANONICAL_API_URL = "https://api.apgiframework.com"
+
 router = APIRouter(prefix="/v1", tags=["Version"])
 
 
@@ -61,12 +63,12 @@ async def get_client_documentation(language: str = "python") -> Any:
     Returns:
         Client library documentation and code examples
     """
-    base_url = os.getenv("API_BASE_URL", "http://localhost:8000")
+    base_url = os.getenv("API_BASE_URL", CANONICAL_API_URL)
 
     # Validate base_url to prevent injection or misconfiguration
     parsed = urlparse(base_url)
     if not parsed.scheme or not parsed.netloc:
-        base_url = "http://localhost:8000"
+        base_url = CANONICAL_API_URL
 
     examples = {
         "python": f"""

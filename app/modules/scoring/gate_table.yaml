@@ -1,0 +1,26 @@
+# Exposure gate table (PR 2b). Versioned: every outbound payload is stamped
+# with `_gate_table_version`. A latent parameter becomes exposable only when
+# its entry carries an evidence record (validation_id, dataset_sha256,
+# reviewer) — see S2-GATE-02. None has one yet, so every parameter is withheld.
+gate_table_version: "1.0.0"
+
+latent_parameters:
+  ignition_state: {status: withheld, evidence: null}
+  ignition_threshold: {status: withheld, evidence: null}
+  precision_exteroceptive: {status: withheld, evidence: null}
+  precision_interoceptive: {status: withheld, evidence: null}
+  prediction_error_exteroceptive: {status: withheld, evidence: null}
+  prediction_error_interoceptive: {status: withheld, evidence: null}
+  somatic_bias: {status: withheld, evidence: null}
+  interoceptive_body_state: {status: withheld, evidence: null}
+
+# Every field name a gated (latent) route may send outbound. Anything else raises.
+outbound_allow_list:
+  - session_id
+  - identifiability_gate
+  - gate_table_version
+  - _gate_table_version
+  - parameter
+  - status
+  - exposed
+  - reason
