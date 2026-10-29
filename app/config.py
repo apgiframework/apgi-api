@@ -281,13 +281,24 @@ class Settings:
         # access events in particular — governing doc §7.4).
         self.audit_signing_key: Optional[str] = os.getenv("AUDIT_SIGNING_KEY")
 
-        # The two consent types every participant must grant, independently
-        # versioned, before their data may be used for the corresponding
-        # purpose (governing doc §7.1 — "two separate versioned consents").
+        # The four consent purposes, independently versioned. A participant
+        # must grant each before their data may be used for that purpose
+        # (S2-CON-01); granting one never implies another.
         self.consent_current_versions: Dict[str, str] = {
+            "product_use": os.getenv("CONSENT_VERSION_PRODUCT_USE", "1.0"),
             "research_participation": os.getenv("CONSENT_VERSION_RESEARCH_PARTICIPATION", "1.0"),
             "data_sharing": os.getenv("CONSENT_VERSION_DATA_SHARING", "1.0"),
+            "recontact": os.getenv("CONSENT_VERSION_RECONTACT", "1.0"),
         }
+        # Master switch for the Explorer research client. Off by default and
+        # additionally requires every canonical consent text to be approved.
+        self.explorer_research_enabled: bool = (
+            os.getenv("EXPLORER_RESEARCH_ENABLED", "false").lower() == "true"
+        )
+        # The study and battery Explorer research sessions attach to. Research
+        # stays disabled while either is unset.
+        self.explorer_study_id: Optional[str] = os.getenv("EXPLORER_STUDY_ID") or None
+        self.explorer_battery_id: Optional[str] = os.getenv("EXPLORER_BATTERY_ID") or None
 
         # Restricted Cloud Storage for raw trial events, and the BigQuery
         # dataset the de-identified export path writes into. Both are unset

@@ -38,6 +38,7 @@ from app.services.authorization import (
     log_audit_event,
 )
 from app.services.consent import has_active_consent, record_consent, revoke_consent
+from app.services.explorer_contract import consent_text_for
 from app.services.rls import set_rls_context
 
 logger = logging.getLogger(__name__)
@@ -189,11 +190,20 @@ async def grant_consent(
     participant = _get_participant_or_404(db, participant_id)
     _check_participant_access(participant, current_user)
 
+    consent_text = request.consent_text
+    if consent_text is None:
+        canonical = consent_text_for(request.consent_type.value, request.locale)
+        if canonical is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No canonical consent text for this purpose and locale",
+            )
+        consent_text = canonical["body"]
     consent = record_consent(
         db,
         participant_id=participant_id,
         consent_type=request.consent_type,
-        consent_text=request.consent_text,
+        consent_text=consent_text,
         ip_address=http_request.client.host if http_request.client else None,
     )
     log_audit_event(
@@ -236,7 +246,7 @@ async def revoke_consent_route(
 @router.get(
     "/{participant_id}/consents/status",
     response_model=ConsentStatusResponse,
-    summary="Effective status of both required consents",
+    summary="Effective status of every consent purpose",
 )
 async def get_consent_status(
     participant_id: str,
@@ -248,6 +258,8 @@ async def get_consent_status(
     _check_participant_access(participant, current_user)
 
     return ConsentStatusResponse(
+        product_use=has_active_consent(db, participant_id, ConsentType.PRODUCT_USE),
+        recontact=has_active_consent(db, participant_id, ConsentType.RECONTACT),
         research_participation=has_active_consent(
             db, participant_id, ConsentType.RESEARCH_PARTICIPATION
         ),

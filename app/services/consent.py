@@ -1,7 +1,8 @@
 """
-Consent enforcement (governing doc §7.1): two independently versioned
-consents — RESEARCH_PARTICIPATION and DATA_SHARING — gate every action that
-touches a participant's data. Granting one never implies the other.
+Consent enforcement (governing doc §7.1): independently versioned consent
+purposes — PRODUCT_USE, RESEARCH_PARTICIPATION, DATA_SHARING and RECONTACT —
+gate every action that touches a participant's data. Granting one never
+implies another.
 """
 
 from __future__ import annotations

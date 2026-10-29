@@ -1,0 +1,847 @@
+{
+  "instrument_id": "apgi-explorer-35",
+  "bank_version": "1.0.0",
+  "locale": "en",
+  "items": [
+    {
+      "item_id": 1,
+      "subscale": "epsilon",
+      "scoring": "ordinal",
+      "text": "When plans change unexpectedly, how do you react initially?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Hardly notice—just adapt smoothly"
+        },
+        {
+          "value": 2,
+          "text": "Notice but adapt quickly"
+        },
+        {
+          "value": 3,
+          "text": "Feel disrupted, need to recalibrate"
+        },
+        {
+          "value": 4,
+          "text": "Strong reaction—feels like system failure"
+        }
+      ]
+    },
+    {
+      "item_id": 2,
+      "subscale": "epsilon",
+      "scoring": "ordinal",
+      "text": "How often do you notice small inconsistencies in your environment?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Rarely—things seem consistent"
+        },
+        {
+          "value": 2,
+          "text": "Sometimes notice obvious ones"
+        },
+        {
+          "value": 3,
+          "text": "Frequently notice subtle mismatches"
+        },
+        {
+          "value": 4,
+          "text": "Constantly—my brain flags inconsistencies"
+        }
+      ]
+    },
+    {
+      "item_id": 3,
+      "subscale": "epsilon",
+      "scoring": "ordinal",
+      "text": "When learning something new, how do you handle being wrong?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Hardly notice errors—keep going"
+        },
+        {
+          "value": 2,
+          "text": "Notice but don't dwell on errors"
+        },
+        {
+          "value": 3,
+          "text": "Errors feel significant—motivate correction"
+        },
+        {
+          "value": 4,
+          "text": "Errors feel painful—strong urge to fix immediately"
+        }
+      ]
+    },
+    {
+      "item_id": 4,
+      "subscale": "epsilon",
+      "scoring": "ordinal",
+      "text": "In social situations, how quickly do you notice when someone's words don't match their tone?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Often miss these mismatches"
+        },
+        {
+          "value": 2,
+          "text": "Notice only large discrepancies"
+        },
+        {
+          "value": 3,
+          "text": "Quickly detect subtle incongruences"
+        },
+        {
+          "value": 4,
+          "text": "Immediately sense any mismatch"
+        }
+      ]
+    },
+    {
+      "item_id": 5,
+      "subscale": "epsilon",
+      "scoring": "ordinal",
+      "text": "How do you experience novelty and new experiences?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Mostly comforting routine preferred"
+        },
+        {
+          "value": 2,
+          "text": "Enjoy some novelty in moderation"
+        },
+        {
+          "value": 3,
+          "text": "Seek novelty—it's energizing"
+        },
+        {
+          "value": 4,
+          "text": "Need constant novelty—routine feels stifling"
+        }
+      ]
+    },
+    {
+      "item_id": 6,
+      "subscale": "precision",
+      "scoring": "ordinal",
+      "text": "When you feel a physical sensation (like a twinge or ache), how do you interpret it?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Probably nothing—ignore it"
+        },
+        {
+          "value": 2,
+          "text": "Note it but wait to see if continues"
+        },
+        {
+          "value": 3,
+          "text": "Pay close attention—could be important"
+        },
+        {
+          "value": 4,
+          "text": "Immediately concerned—might be serious"
+        }
+      ]
+    },
+    {
+      "item_id": 7,
+      "subscale": "precision",
+      "scoring": "nominal",
+      "text": "In uncertain situations, where does your attention naturally go?",
+      "options": [
+        {
+          "value": 1,
+          "text": "To potential opportunities"
+        },
+        {
+          "value": 2,
+          "text": "To gathering more information"
+        },
+        {
+          "value": 3,
+          "text": "To potential problems or threats"
+        },
+        {
+          "value": 4,
+          "text": "To how my body feels about it"
+        }
+      ]
+    },
+    {
+      "item_id": 8,
+      "subscale": "precision",
+      "scoring": "ordinal",
+      "text": "How much do social feedback and others' opinions influence your decisions?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Minimal—I trust my own judgment"
+        },
+        {
+          "value": 2,
+          "text": "Consider but don't overvalue"
+        },
+        {
+          "value": 3,
+          "text": "Strongly influence my choices"
+        },
+        {
+          "value": 4,
+          "text": "Often override my own judgment"
+        }
+      ]
+    },
+    {
+      "item_id": 9,
+      "subscale": "precision",
+      "scoring": "nominal",
+      "text": "When making decisions, how do you weigh logical analysis vs. intuitive feelings?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Almost entirely logical analysis"
+        },
+        {
+          "value": 2,
+          "text": "Mostly logic with some intuition"
+        },
+        {
+          "value": 3,
+          "text": "Equal weight to both"
+        },
+        {
+          "value": 4,
+          "text": "Intuition guides, logic confirms"
+        }
+      ]
+    },
+    {
+      "item_id": 10,
+      "subscale": "precision",
+      "scoring": "ordinal",
+      "text": "How quickly do you form strong opinions or judgments?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Slowly—prefer to stay uncertain"
+        },
+        {
+          "value": 2,
+          "text": "Moderately—after some consideration"
+        },
+        {
+          "value": 3,
+          "text": "Fairly quickly with moderate confidence"
+        },
+        {
+          "value": 4,
+          "text": "Very quickly with high certainty"
+        }
+      ]
+    },
+    {
+      "item_id": 11,
+      "subscale": "threshold",
+      "scoring": "ordinal",
+      "text": "When facing a challenging task, what typically happens?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Act immediately without much thought"
+        },
+        {
+          "value": 2,
+          "text": "Act after brief consideration"
+        },
+        {
+          "value": 3,
+          "text": "Need significant preparation before acting"
+        },
+        {
+          "value": 4,
+          "text": "Often avoid or delay action due to high bar"
+        }
+      ]
+    },
+    {
+      "item_id": 12,
+      "subscale": "threshold",
+      "scoring": "ordinal",
+      "text": "How do you handle tasks with no clear 'right' way to do them?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Just start and figure it out"
+        },
+        {
+          "value": 2,
+          "text": "Prefer some guidance but can improvise"
+        },
+        {
+          "value": 3,
+          "text": "Need clear parameters before starting"
+        },
+        {
+          "value": 4,
+          "text": "Avoid until I have complete clarity"
+        }
+      ]
+    },
+    {
+      "item_id": 13,
+      "subscale": "threshold",
+      "scoring": "ordinal",
+      "text": "How easily do you switch between different types of activities?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Seamlessly—no transition needed"
+        },
+        {
+          "value": 2,
+          "text": "With brief adjustment period"
+        },
+        {
+          "value": 3,
+          "text": "Need time to shift mental gears"
+        },
+        {
+          "value": 4,
+          "text": "Difficult—each switch feels like starting over"
+        }
+      ]
+    },
+    {
+      "item_id": 14,
+      "subscale": "threshold",
+      "scoring": "ordinal",
+      "text": "When starting something new, how much 'activation energy' do you need?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Very little—ideas become action quickly"
+        },
+        {
+          "value": 2,
+          "text": "Some motivation required"
+        },
+        {
+          "value": 3,
+          "text": "Significant momentum needed"
+        },
+        {
+          "value": 4,
+          "text": "Often stay in planning/ideation phase"
+        }
+      ]
+    },
+    {
+      "item_id": 15,
+      "subscale": "threshold",
+      "scoring": "ordinal",
+      "text": "How do you approach decisions with incomplete information?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Comfortable deciding with minimal data"
+        },
+        {
+          "value": 2,
+          "text": "Decide with basic facts"
+        },
+        {
+          "value": 3,
+          "text": "Need substantial information"
+        },
+        {
+          "value": 4,
+          "text": "Paralyzed until I have near-complete information"
+        }
+      ]
+    },
+    {
+      "item_id": 16,
+      "subscale": "somatic",
+      "scoring": "ordinal",
+      "text": "When you're stressed, where do you feel it most?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Mentally—thoughts racing"
+        },
+        {
+          "value": 2,
+          "text": "Both mentally and physically"
+        },
+        {
+          "value": 3,
+          "text": "Primarily in my body (tension, sensations)"
+        },
+        {
+          "value": 4,
+          "text": "Overwhelmingly physical—hard to think clearly"
+        }
+      ]
+    },
+    {
+      "item_id": 17,
+      "subscale": "somatic",
+      "scoring": "ordinal",
+      "text": "How much do physical sensations influence your mood?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Minimal—mind determines mood"
+        },
+        {
+          "value": 2,
+          "text": "Some connection"
+        },
+        {
+          "value": 3,
+          "text": "Strong influence—body state = mood"
+        },
+        {
+          "value": 4,
+          "text": "Dominant—physical state primarily determines mood"
+        }
+      ]
+    },
+    {
+      "item_id": 18,
+      "subscale": "somatic",
+      "scoring": "ordinal",
+      "text": "How aware are you of your internal body state right now?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Not particularly aware"
+        },
+        {
+          "value": 2,
+          "text": "Somewhat aware"
+        },
+        {
+          "value": 3,
+          "text": "Quite aware"
+        },
+        {
+          "value": 4,
+          "text": "Very tuned in to internal sensations"
+        }
+      ]
+    },
+    {
+      "item_id": 19,
+      "subscale": "somatic",
+      "scoring": "ordinal",
+      "text": "When you have a gut feeling about something, how do you treat it?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Usually ignore—prefer logic"
+        },
+        {
+          "value": 2,
+          "text": "Consider but don't rely on it"
+        },
+        {
+          "value": 3,
+          "text": "Strong input into decisions"
+        },
+        {
+          "value": 4,
+          "text": "Often primary guide for decisions"
+        }
+      ]
+    },
+    {
+      "item_id": 20,
+      "subscale": "somatic",
+      "scoring": "ordinal",
+      "text": "How connected do you feel to your physical self?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Mind and body feel somewhat separate"
+        },
+        {
+          "value": 2,
+          "text": "Moderately connected"
+        },
+        {
+          "value": 3,
+          "text": "Strongly connected—integrated experience"
+        },
+        {
+          "value": 4,
+          "text": "Body is central to my sense of self"
+        }
+      ]
+    },
+    {
+      "item_id": 21,
+      "subscale": "interactions",
+      "scoring": "ordinal",
+      "text": "How do you react when expectations aren't met?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Recalibrate quickly and continue"
+        },
+        {
+          "value": 2,
+          "text": "Pause to reassess, then adapt"
+        },
+        {
+          "value": 3,
+          "text": "Strongly affected, slow to recover"
+        },
+        {
+          "value": 4,
+          "text": "Deep disruption, need extensive processing"
+        }
+      ]
+    },
+    {
+      "item_id": 22,
+      "subscale": "interactions",
+      "scoring": "ordinal",
+      "text": "How do you balance external demands with internal needs?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Easily prioritize internal needs"
+        },
+        {
+          "value": 2,
+          "text": "Consider both, slight internal bias"
+        },
+        {
+          "value": 3,
+          "text": "Often prioritize external demands"
+        },
+        {
+          "value": 4,
+          "text": "Frequently override internal needs for others"
+        }
+      ]
+    },
+    {
+      "item_id": 23,
+      "subscale": "interactions",
+      "scoring": "ordinal",
+      "text": "When plans fail, how do you recover?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Immediately generate alternatives"
+        },
+        {
+          "value": 2,
+          "text": "Brief pause, then replan"
+        },
+        {
+          "value": 3,
+          "text": "Need significant time to regroup"
+        },
+        {
+          "value": 4,
+          "text": "Often get stuck in disappointment"
+        }
+      ]
+    },
+    {
+      "item_id": 24,
+      "subscale": "interactions",
+      "scoring": "ordinal",
+      "text": "How do novelty-seeking and routine-comfort interact for you?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Clear preference for routine"
+        },
+        {
+          "value": 2,
+          "text": "Mostly routine, occasional novelty"
+        },
+        {
+          "value": 3,
+          "text": "Balance of both—context dependent"
+        },
+        {
+          "value": 4,
+          "text": "Strong drive for novelty, hard to sustain routine"
+        }
+      ]
+    },
+    {
+      "item_id": 25,
+      "subscale": "interactions",
+      "scoring": "ordinal",
+      "text": "When stressed, how do body awareness and action tendency interact?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Act despite body signals"
+        },
+        {
+          "value": 2,
+          "text": "Notice body but push through"
+        },
+        {
+          "value": 3,
+          "text": "Body signals slow action significantly"
+        },
+        {
+          "value": 4,
+          "text": "Body state dominates—action halted"
+        }
+      ]
+    },
+    {
+      "item_id": 26,
+      "subscale": "temporal",
+      "scoring": "ordinal",
+      "text": "How consistent are your reactions across different days?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Very consistent—similar situations = similar reactions"
+        },
+        {
+          "value": 2,
+          "text": "Generally consistent with minor variations"
+        },
+        {
+          "value": 3,
+          "text": "Noticeably variable—depends on day/state"
+        },
+        {
+          "value": 4,
+          "text": "Highly variable—same situations trigger very different responses"
+        }
+      ]
+    },
+    {
+      "item_id": 27,
+      "subscale": "temporal",
+      "scoring": "ordinal",
+      "text": "How much does your current energy level affect your parameter expression?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Minimal effect—parameters stable"
+        },
+        {
+          "value": 2,
+          "text": "Some effect on specific parameters"
+        },
+        {
+          "value": 3,
+          "text": "Significant effect across several parameters"
+        },
+        {
+          "value": 4,
+          "text": "Profound effect—almost different 'mode' when tired/energized"
+        }
+      ]
+    },
+    {
+      "item_id": 28,
+      "subscale": "temporal",
+      "scoring": "ordinal",
+      "text": "Over the past year, how much have your typical patterns changed?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Very stable—same patterns throughout"
+        },
+        {
+          "value": 2,
+          "text": "Minor gradual shifts"
+        },
+        {
+          "value": 3,
+          "text": "Noticeable evolution in some areas"
+        },
+        {
+          "value": 4,
+          "text": "Significant transformation in multiple areas"
+        }
+      ]
+    },
+    {
+      "item_id": 29,
+      "subscale": "temporal",
+      "scoring": "ordinal",
+      "text": "How quickly do you adapt to new environments or contexts?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Very quickly—seamless transition"
+        },
+        {
+          "value": 2,
+          "text": "Within hours or days"
+        },
+        {
+          "value": 3,
+          "text": "Takes weeks to feel fully adjusted"
+        },
+        {
+          "value": 4,
+          "text": "Long adaptation period or never fully adjust"
+        }
+      ]
+    },
+    {
+      "item_id": 30,
+      "subscale": "temporal",
+      "scoring": "ordinal",
+      "text": "How do your stress responses change over time?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Immediate spike, quick recovery"
+        },
+        {
+          "value": 2,
+          "text": "Moderate peak, gradual return to baseline"
+        },
+        {
+          "value": 3,
+          "text": "Sustained elevation, slow recovery"
+        },
+        {
+          "value": 4,
+          "text": "Extended impact—stress lingers for long periods"
+        }
+      ]
+    },
+    {
+      "item_id": 31,
+      "subscale": "environment",
+      "scoring": "ordinal",
+      "text": "How much does your social environment affect your APGI expression?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Minimal—similar across contexts"
+        },
+        {
+          "value": 2,
+          "text": "Some parameters shift with social context"
+        },
+        {
+          "value": 3,
+          "text": "Significant variation between social contexts"
+        },
+        {
+          "value": 4,
+          "text": "Profoundly different across social environments"
+        }
+      ]
+    },
+    {
+      "item_id": 32,
+      "subscale": "environment",
+      "scoring": "ordinal",
+      "text": "How do structured vs. unstructured environments affect you?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Thrive equally in both"
+        },
+        {
+          "value": 2,
+          "text": "Slight preference but adaptable"
+        },
+        {
+          "value": 3,
+          "text": "Strong preference for one over other"
+        },
+        {
+          "value": 4,
+          "text": "Only function well in preferred environment"
+        }
+      ]
+    },
+    {
+      "item_id": 33,
+      "subscale": "environment",
+      "scoring": "ordinal",
+      "text": "How does task load affect your parameter expression?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Consistent regardless of workload"
+        },
+        {
+          "value": 2,
+          "text": "Some parameters shift under high load"
+        },
+        {
+          "value": 3,
+          "text": "Significant expression changes with load"
+        },
+        {
+          "value": 4,
+          "text": "Extreme variation—different 'person' under high load"
+        }
+      ]
+    },
+    {
+      "item_id": 34,
+      "subscale": "environment",
+      "scoring": "ordinal",
+      "text": "How sensitive are you to physical environment (lighting, noise, space)?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Minimal sensitivity—adapt easily"
+        },
+        {
+          "value": 2,
+          "text": "Notice but not strongly affected"
+        },
+        {
+          "value": 3,
+          "text": "Significantly affected by suboptimal conditions"
+        },
+        {
+          "value": 4,
+          "text": "Deeply impacted—environment strongly shapes experience"
+        }
+      ]
+    },
+    {
+      "item_id": 35,
+      "subscale": "environment",
+      "scoring": "ordinal",
+      "text": "How does your effectiveness vary across different contexts?",
+      "options": [
+        {
+          "value": 1,
+          "text": "Consistently effective across contexts"
+        },
+        {
+          "value": 2,
+          "text": "Some variation but generally capable"
+        },
+        {
+          "value": 3,
+          "text": "Significant variation—strengths context-dependent"
+        },
+        {
+          "value": 4,
+          "text": "Either extremely effective or overwhelmed"
+        }
+      ]
+    }
+  ]
+}

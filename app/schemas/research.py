@@ -58,9 +58,13 @@ class ConsentGrantRequest(BaseModel):
     model_config = _FORBID_EXTRA
 
     consent_type: ConsentType
-    consent_text: str = Field(
-        ..., min_length=1, description="Exact consent text shown to the participant"
+    consent_text: Optional[str] = Field(
+        None,
+        min_length=1,
+        description="Legacy: client-supplied text. Omit to record the canonical server-served "
+        "text for the configured version (GET /v1/consent-texts).",
     )
+    locale: str = Field("en", min_length=2, max_length=10)
 
 
 class ConsentRevokeRequest(BaseModel):
@@ -80,10 +84,12 @@ class ConsentResponse(BaseModel):
 
 
 class ConsentStatusResponse(BaseModel):
-    """Effective (unrevoked, current-version) status for both required consents."""
+    """Effective (unrevoked, current-version) status for each consent purpose."""
 
+    product_use: bool = False
     research_participation: bool
     data_sharing: bool
+    recontact: bool = False
 
 
 # ---------------------------------------------------------------------------

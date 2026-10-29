@@ -58,6 +58,7 @@ from app.routes import (
     api_keys,
     auth,
     batteries,
+    explorer,
     export,
     health,
     instrument,
@@ -407,6 +408,7 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
     app.include_router(longitudinal.router)
     app.include_router(nof1.router)
     app.include_router(acquisition.router)
+    app.include_router(explorer.router)
 
     # Mount static files for web UI
     web_dir = os.path.join(os.path.dirname(__file__), "..", "web")

@@ -787,10 +787,17 @@ class ProcessedWebhookEvent(Base):  # type: ignore[misc, valid-type]
 
 
 class ConsentType(str, PythonEnum):
-    """The two independently versioned consents every participant must grant."""
+    """The four independently versioned consent purposes (S2-CON-01).
 
+    Granting one never implies another. `PRODUCT_USE` covers running the
+    service for the person; the research purposes are separate so the product
+    keeps working when research consent is declined or withdrawn.
+    """
+
+    PRODUCT_USE = "product_use"
     RESEARCH_PARTICIPATION = "research_participation"
     DATA_SHARING = "data_sharing"
+    RECONTACT = "recontact"
 
 
 class StudyStatus(str, PythonEnum):
@@ -907,7 +914,7 @@ class Consent(Base):  # type: ignore[misc, valid-type]
         SQLEnum(ConsentType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         index=True,
-        comment="Which of the two required consents this record grants/revokes",
+        comment="Which consent purpose this record grants/revokes",
     )
     version = Column(String(20), nullable=False, comment="Version of the consent text granted")
     consent_text_hash = Column(
@@ -1275,6 +1282,12 @@ class TrialEvent(Base):  # type: ignore[misc, valid-type]
         server_default=func.now(),
         comment="Ingestion timestamp",
     )
+    # Idempotent client-journal events (Explorer research mode): the client
+    # numbers events per session and hashes a canonical payload, so a retry of
+    # the same event is acknowledged rather than rejected or double-counted.
+    event_id = Column(String(36), nullable=True, comment="Client-generated event UUID")
+    seq_no = Column(Integer, nullable=True, comment="Client journal sequence number, per session")
+    payload_sha256 = Column(String(64), nullable=True, comment="SHA-256 of the canonical payload")
 
     participant_session = relationship("ParticipantSession", back_populates="trial_events")
 
@@ -1285,6 +1298,8 @@ class TrialEvent(Base):  # type: ignore[misc, valid-type]
             "trial_index",
             name="uq_trial_events_session_task_index",
         ),
+        UniqueConstraint("participant_session_id", "seq_no", name="uq_trial_events_session_seq"),
+        UniqueConstraint("participant_session_id", "event_id", name="uq_trial_events_session_event"),
         Index("idx_trial_events_session", "participant_session_id"),
     )
 
