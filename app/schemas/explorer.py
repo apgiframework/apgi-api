@@ -28,6 +28,8 @@ class ExplorerConfigResponse(BaseModel):
     validation_results: bool = False
     instrument: InstrumentRef
     consent_purposes: list[ConsentPurposeInfo]
+    study_id: str | None = None
+    battery_id: str | None = None
 
 
 class ConsentTextResponse(BaseModel):

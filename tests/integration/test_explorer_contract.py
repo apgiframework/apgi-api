@@ -136,3 +136,22 @@ def test_scoring_subscales_independent_and_nominal_items_excluded() -> None:
     assert a["epsilon"] != b["epsilon"]
     assert all(a[k] == b[k] for k in a if k != "epsilon")
     assert contract.score_answers({**base, 7: 4})["precision"] == a["precision"]
+
+
+def test_research_needs_switch_study_battery_and_approved_texts(
+    db_engine: Any, monkeypatch: Any
+) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "explorer_research_enabled", True)
+    monkeypatch.setattr(settings, "explorer_study_id", "s1")
+    monkeypatch.setattr(settings, "explorer_battery_id", "b1")
+    # Texts are still drafts, so research stays off even with everything configured.
+    assert contract.research_enabled() is False
+    body = _client(db_engine, [], "anon").get("/v1/explorer/config").json()
+    assert (body["study_id"], body["battery_id"]) == ("s1", "b1")
+    approved = [dict(t, status="approved") for t in contract.consent_texts()]
+    monkeypatch.setattr(contract, "consent_texts", lambda: approved)
+    assert contract.research_enabled() is True
+    monkeypatch.setattr(settings, "explorer_battery_id", None)
+    assert contract.research_enabled() is False

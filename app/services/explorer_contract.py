@@ -86,8 +86,10 @@ def consent_text_for(consent_type: str, locale: str = "en") -> dict[str, Any] | 
 
 
 def research_enabled() -> bool:
-    """Research mode is on only when explicitly enabled AND every text is approved."""
+    """Research mode needs the switch, a study and battery, AND approved texts."""
     if not settings.explorer_research_enabled:
+        return False
+    if not (settings.explorer_study_id and settings.explorer_battery_id):
         return False
     return all(
         (consent_text_for(ct, "en") or {}).get("status") == "approved"

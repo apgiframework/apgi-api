@@ -71,6 +71,8 @@ async def get_explorer_config() -> ExplorerConfigResponse:
             item_count=len(bank["items"]),
         ),
         consent_purposes=purposes,
+        study_id=settings.explorer_study_id,
+        battery_id=settings.explorer_battery_id,
     )
 
 

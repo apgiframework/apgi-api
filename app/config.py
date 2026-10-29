@@ -295,6 +295,10 @@ class Settings:
         self.explorer_research_enabled: bool = (
             os.getenv("EXPLORER_RESEARCH_ENABLED", "false").lower() == "true"
         )
+        # The study and battery Explorer research sessions attach to. Research
+        # stays disabled while either is unset.
+        self.explorer_study_id: Optional[str] = os.getenv("EXPLORER_STUDY_ID") or None
+        self.explorer_battery_id: Optional[str] = os.getenv("EXPLORER_BATTERY_ID") or None
 
         # Restricted Cloud Storage for raw trial events, and the BigQuery
         # dataset the de-identified export path writes into. Both are unset
