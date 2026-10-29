@@ -28,7 +28,7 @@ If any are missing, install them before continuing.
 
 ```bash
 # If you haven't already, clone the repository
-git clone https://github.com/lesoto/apgi-api.git
+git clone https://github.com/apgiframework/apgi-api.git
 cd apgi-api
 
 # Verify you're on the right branch (should be already)
