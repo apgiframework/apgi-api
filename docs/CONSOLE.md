@@ -10,7 +10,7 @@ First release scope: operational health, ingestion and job status, failure inves
 | Home panel 1 Ingestion | `participant_sessions`, `trial_events`, `acquisition_uploads` | counts link to Catalog / Failures |
 | Home panel 2 Jobs | `tasks`, `webhook_deliveries` | queue backend reported as `celery` |
 | Home panel 3 Data origin | `participant_sessions.data_origin` | synthetic / human-observed / unclassified (NULL, never inferred); links to filtered Catalog; origin filter also scopes panels 1 and 4 |
-| Home panel 4 Scientific quality | sessions, trial events | 4 of 14 indicators measurable: completion, interruption, missing events (sequence gaps), device-tier distribution |
+| Home panel 4 Scientific quality | sessions, trial events | headline indicators; full list on the Data quality screen (`GET /v1/ops/data-quality`) |
 | Home panel 5 Retention/deletion | none | unknown until the deletion ledger (S3-GOV-04) exists |
 | Home panel 6 Platform health | local probes; Cloud Monitoring; Cloud SQL Admin | see *Platform health* below; unconfigured or unreadable sources stay unknown |
 | Catalog | sessions, chunk uploads, jobs | search, filters, session timeline |
@@ -112,6 +112,32 @@ worst-instance p95 is conservative, not a fleet-wide percentile. Restore-drill d
 New alert rules: 5xx ratio >= `ALERT_5XX_RATIO` (5%, min 20 requests) and last backup older than `ALERT_BACKUP_MAX_AGE_HOURS` (36).
 **Not verified against a live GCP project**: the REST calls are covered by unit tests with fake responses only; check
 the filters and IAM in staging. Cloud Tasks queue age is not applicable while the queue is Celery.
+
+## Scientific data quality (batch 6)
+
+`GET /v1/ops/data-quality?study_id&battery_id&origin` and the **Data quality** screen return the master plan's fourteen
+indicators (Monitoring chapter, "Scientific quality dashboard"), each `measured`, `partial` or `unmeasured` with the reason.
+Aggregates only: no participant or session identifiers (tested). 10 of 14 have a data source today.
+
+| # | Indicator | Status | Gap |
+|---|---|---|---|
+| 1 | Sessions by protocol (battery + version) | measured | |
+| 2 | Complete vs interrupted | measured | |
+| 3 | Missing trial events / sequence gaps | measured | |
+| 4 | Signal chunk gaps | partial | acquisition sessions are not linked to participant sessions, so filters do not apply |
+| 5 | Device / browser / tier | partial | tier only |
+| 6 | Administration mode and app version | **unmeasured** | no field stored |
+| 7 | Clock synchronisation | measured | from per-session timing-error summaries |
+| 8 | Validity-screen exclusion rates | measured | unscreened sessions reported separately |
+| 9 | Analysis completion | measured | includes durable scoring-job states |
+| 10 | Protocol / battery / gate versions | partial | gate versions not recorded |
+| 11 | Confirmatory / holdout separation | **unmeasured** | partition assignment not stored |
+| 12 | Prediction and K-gate classifications | **unmeasured** | needs S4-ANL-05 validation results |
+| 13 | Reproduction success | **unmeasured** | needs dataset versions (S4-ANL-03) |
+| 14 | Retention per wave | measured | counts completed `session_index`; wave schedule not stored |
+
+Not done: dataset-version scoping (the plan scopes by dataset version; this scopes by study, protocol and origin),
+small-cell suppression for tiny strata, and the Track A/B filter.
 
 ## Use
 

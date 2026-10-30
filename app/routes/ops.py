@@ -166,3 +166,29 @@ async def ops_ack_alert(
 async def ops_platform(refresh: bool = Query(False)) -> Dict[str, Any]:
     snap = await run_in_threadpool(platform_health.snapshot, refresh)
     return _envelope(snap, snap["as_of"])
+
+
+@router.get("/data-quality", summary="The fourteen scientific data-quality indicators")
+async def ops_data_quality(
+    study_id: Optional[str] = Query(None, max_length=36),
+    battery_id: Optional[str] = Query(None, max_length=36),
+    origin: Optional[str] = Query(None, pattern="^(synthetic|human_observed|unclassified)$"),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    from app.services import data_quality
+
+    return _envelope(data_quality.compute(db, study_id, battery_id, origin))
+
+
+@router.get("/studies", summary="Studies and batteries for the data-quality filters")
+async def ops_studies(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    from app.database.models import Battery, Study
+
+    studies = [
+        {"study_id": s.study_id, "name": s.name} for s in db.query(Study).order_by(Study.name)
+    ]
+    batteries = [
+        {"battery_id": b.battery_id, "study_id": b.study_id, "name": f"{b.name} v{b.version}"}
+        for b in db.query(Battery).order_by(Battery.name)
+    ]
+    return _envelope({"studies": studies, "batteries": batteries})

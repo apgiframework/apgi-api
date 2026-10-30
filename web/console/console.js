@@ -165,7 +165,7 @@
         ]),
         h("section", { class: "panel scientific", "aria-labelledby": "p4" }, [
           h("h2", { id: "p4" }, "4 · Scientific quality"),
-          h("p", { class: "muted" }, "Research view, kept separate from operations. " + q.indicators_available + " of " + q.indicators_planned + " planned indicators are measurable today."),
+          h("p", { class: "muted" }, ["Research view, kept separate from operations. " + (isNull(q.indicators_available) ? "?" : q.indicators_available) + " of " + q.indicators_planned + " indicators have a data source. ", h("a", { href: "#/quality" }, "See all fourteen")]),
           kv("Completion rate", val(c.completion_rate, pct)),
           kv("Interruption (abandoned) rate", val(c.interruption_rate, pct)),
           kv("Sessions with missing events", val(gaps.sessions_with_gaps)),
@@ -313,6 +313,53 @@
     });
   }
 
+  // ---- Data quality (scientific view, kept separate from operations) ----
+  function labelize(k) { return k.replace(/_/g, " "); }
+  function fmtValue(k, v) {
+    if (isNull(v)) return "unknown";
+    if (typeof v === "number" && /rate|retention|ratio/.test(k)) return pct(v);
+    if (typeof v === "object") {
+      return Object.keys(v).map(function (kk) { return labelize(kk) + ": " + fmtValue(kk, v[kk]); }).join(", ") || "none";
+    }
+    return String(v);
+  }
+  function renderQuality(params) {
+    var qs = new URLSearchParams();
+    ["study_id", "battery_id", "origin"].forEach(function (k) { if (params.get(k)) qs.set(k, params.get(k)); });
+    return Promise.all([api("/v1/ops/data-quality?" + qs.toString()), api("/v1/ops/studies")]).then(function (r) {
+      var d = r[0].data, meta = r[1].data;
+      var studySel = h("select", { id: "study" }, [h("option", { value: "" }, "All studies")].concat(meta.studies.map(function (s) {
+        return h("option", { value: s.study_id, selected: params.get("study_id") === s.study_id ? "selected" : null }, s.name);
+      })));
+      var batSel = h("select", { id: "battery" }, [h("option", { value: "" }, "All protocols")].concat(meta.batteries.map(function (b) {
+        return h("option", { value: b.battery_id, selected: params.get("battery_id") === b.battery_id ? "selected" : null }, b.name);
+      })));
+      var originSel = originFilter(params.get("origin") || "");
+      var form = h("form", { class: "filters", onsubmit: function (e) {
+        e.preventDefault();
+        var sp = new URLSearchParams();
+        if (studySel.value) sp.set("study_id", studySel.value);
+        if (batSel.value) sp.set("battery_id", batSel.value);
+        if (originSel.value) sp.set("origin", originSel.value);
+        location.hash = "#/quality" + (sp.toString() ? "?" + sp.toString() : "");
+      } }, [h("label", {}, ["Study", studySel]), h("label", {}, ["Protocol", batSel]), h("label", {}, ["Origin", originSel]),
+        h("button", { class: "btn", type: "submit" }, "Apply")]);
+      var cls = { measured: "ok", partial: "warn", unmeasured: "unknown" };
+      var cards = d.indicators.map(function (i) {
+        var body = [h("p", { class: "muted" }, i.why)];
+        if (i.value && typeof i.value === "object") {
+          Object.keys(i.value).forEach(function (k) { body.push(kv(labelize(k), val(i.value[k], function (v) { return fmtValue(k, v); }))); });
+        }
+        if (i.note) body.push(h("p", { class: "muted" }, i.note));
+        return h("section", { class: "panel scientific" }, [
+          h("h2", {}, [i.n + " · " + i.name + "  ", pill(i.status, cls[i.status])])].concat(body));
+      });
+      show(h("div", {}, [h("h1", {}, "Data quality"),
+        h("p", { class: "muted" }, d.available + " of " + d.planned + " indicators have a data source; " + d.session_count + " sessions in scope. Aggregates only, with no participant or session identifiers. Unmeasured indicators are shown rather than hidden."),
+        form, h("div", { class: "grid" }, cards)]));
+    });
+  }
+
   // ---- Alerts ----
   function renderAlerts() {
     return api("/v1/ops/alerts").then(function (res) {
@@ -353,6 +400,7 @@
     else if (name === "session") p = renderSession(decodeURIComponent(path.split("/")[2] || ""));
     else if (name === "failures") p = renderFailures();
     else if (name === "alerts") p = renderAlerts();
+    else if (name === "quality") p = renderQuality(params);
     else p = renderHome(params);
     p.catch(function (e) {
       if (e.status === 403) show(h("div", { class: "panel" }, [h("h1", {}, "Access denied"), h("p", {}, "The console requires an administrator role.")]));

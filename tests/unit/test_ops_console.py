@@ -256,3 +256,138 @@ def test_correlation_id_minted_echoed_and_sanitised() -> None:
         assert ok.headers["X-APGI-Correlation-Id"] == "trace-abcdef12"
         bad = c.get("/health/live", headers={"X-APGI-Correlation-Id": 'x"; drop'})
         assert bad.headers["X-APGI-Correlation-Id"] != 'x"; drop'
+
+
+# ---------------------------------------------------------------------------
+# Data-quality indicators
+# ---------------------------------------------------------------------------
+
+
+def _quality_world(db: Any) -> Any:
+    from app.database.models import (
+        Battery,
+        Participant,
+        ParticipantSession,
+        ParticipantSessionStatus,
+        Study,
+        TrialEvent,
+    )
+
+    study = Study(name="Pilot")
+    db.add(study)
+    db.commit()
+    battery = Battery(study_id=study.study_id, name="Explorer", version="1.0", instrument_schema={})
+    people = [Participant() for _ in range(3)]
+    db.add_all([battery, *people])
+    db.commit()
+
+    def add(p: Any, idx: int, status: Any, **kw: Any) -> Any:
+        s = ParticipantSession(
+            participant_id=p.participant_id,
+            study_id=study.study_id,
+            battery_id=battery.battery_id,
+            session_index=idx,
+            status=status,
+            **kw,
+        )
+        db.add(s)
+        db.commit()
+        return s
+
+    C = ParticipantSessionStatus
+    a = add(
+        people[0],
+        1,
+        C.COMPLETED,
+        device_tier="A",
+        data_origin="synthetic",
+        norm_eligible=True,
+        screening={"flags": [], "exclusion_reasons": []},
+        timing_error_distribution={"n": 10, "p95": 4.0},
+        scores={"x": 1},
+    )
+    add(people[0], 2, C.COMPLETED, device_tier="A", data_origin="synthetic")
+    add(
+        people[1],
+        1,
+        C.COMPLETED,
+        device_tier="C",
+        data_origin="synthetic",
+        norm_eligible=False,
+        screening={"flags": [], "exclusion_reasons": ["device_tier_c"]},
+        timing_error_distribution={"n": 10, "p95": 30.0},
+    )
+    add(people[2], 1, C.ABANDONED, data_origin="human_observed")
+    for seq in (0, 1, 3):  # gap at 2
+        db.add(
+            TrialEvent(
+                participant_session_id=a.participant_session_id,
+                task_type="t",
+                trial_index=seq,
+                seq_no=seq,
+            )
+        )
+    db.commit()
+    return study, battery
+
+
+def _by_key(res: Any) -> Any:
+    return {i["key"]: i for i in res["data"]["indicators"]}
+
+
+def test_fourteen_indicators_with_honest_status(client: TestClient, test_db_session: Any) -> None:
+    _quality_world(test_db_session)
+    res = client.get("/v1/ops/data-quality").json()
+    ind = _by_key(res)
+    assert len(res["data"]["indicators"]) == 14 and res["data"]["planned"] == 14
+    for key in (
+        "admin_mode_version",
+        "holdout_separation",
+        "kgate_classifications",
+        "reproduction",
+    ):
+        assert ind[key]["status"] == "unmeasured" and ind[key]["value"] is None and ind[key]["note"]
+    assert (
+        ind["completion"]["value"]["completed"] == 3
+        and ind["completion"]["value"]["abandoned"] == 1
+    )
+    assert ind["missing_events"]["value"]["missing_events"] == 1
+    assert ind["exclusions"]["value"]["reasons"] == {"device_tier_c": 1}
+    assert ind["exclusions"]["value"]["unscreened"] == 2
+    assert ind["clock_sync"]["value"]["worst_session_p95_error_ms"] == 30.0
+    assert ind["analysis_status"]["value"]["awaiting_scoring"] == 2
+    assert ind["retention"]["value"]["participants_completing_wave_1"] == 2
+    assert ind["retention"]["value"]["waves"]["wave_2"]["participants"] == 1
+    assert ind["device_tier"]["status"] == "partial"
+    assert res["data"]["available"] == 10
+
+
+def test_data_quality_filters_by_origin_and_has_no_identifiers(
+    client: TestClient, test_db_session: Any
+) -> None:
+    study, battery = _quality_world(test_db_session)
+    syn = client.get("/v1/ops/data-quality", params={"origin": "synthetic"}).json()
+    assert syn["data"]["session_count"] == 3
+    hum = client.get("/v1/ops/data-quality", params={"origin": "human_observed"}).json()
+    assert _by_key(hum)["completion"]["value"]["interruption_rate"] == 1.0
+    scoped = client.get("/v1/ops/data-quality", params={"study_id": "other"}).json()
+    assert scoped["data"]["session_count"] == 0
+    assert _by_key(scoped)["completion"]["value"]["completion_rate"] is None
+    body = str(client.get("/v1/ops/data-quality").json())
+    from app.database.models import Participant, ParticipantSession
+
+    for pid in test_db_session.query(Participant.participant_id):
+        assert pid[0] not in body
+    for sid in test_db_session.query(ParticipantSession.participant_session_id):
+        assert sid[0] not in body
+    studies = client.get("/v1/ops/studies").json()["data"]
+    assert (
+        studies["studies"][0]["name"] == "Pilot"
+        and studies["batteries"][0]["study_id"] == study.study_id
+    )
+
+
+def test_empty_database_quality_is_unknown_not_zero(client: TestClient) -> None:
+    res = client.get("/v1/ops/data-quality").json()["data"]
+    comp = next(i for i in res["indicators"] if i["key"] == "completion")
+    assert comp["value"]["completion_rate"] is None and res["session_count"] == 0

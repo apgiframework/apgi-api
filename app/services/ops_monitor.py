@@ -279,11 +279,16 @@ def panel_quality(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
             "missing_events": sum(m for m in missing if m > 0),
         }
 
+    def indicators_available() -> int:
+        from app.services import data_quality  # deferred: data_quality imports this module
+
+        return int(data_quality.compute(db, None, None, origin)["available"])
+
     return {
         "completion": _safe(db, completion),
         "device_tier_distribution": _safe(db, tiers),
         "missing_events": _safe(db, seq_gaps),
-        "indicators_available": 4,
+        "indicators_available": _safe(db, indicators_available),
         "indicators_planned": 14,
     }
 
