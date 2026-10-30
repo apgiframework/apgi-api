@@ -75,6 +75,7 @@ from app.routes import (
     tasks,
     templates,
     trials,
+    updates,
     users,
     version,
     webhooks,
@@ -409,6 +410,7 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
     app.include_router(nof1.router)
     app.include_router(acquisition.router)
     app.include_router(explorer.router)
+    app.include_router(updates.router)
 
     # Mount static files for web UI
     web_dir = os.path.join(os.path.dirname(__file__), "..", "web")
