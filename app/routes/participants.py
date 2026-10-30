@@ -190,15 +190,15 @@ async def grant_consent(
     participant = _get_participant_or_404(db, participant_id)
     _check_participant_access(participant, current_user)
 
-    consent_text = request.consent_text
-    if consent_text is None:
-        canonical = consent_text_for(request.consent_type.value, request.locale)
-        if canonical is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No canonical consent text for this purpose and locale",
-            )
-        consent_text = canonical["body"]
+    # The text is always the server-served canonical text for the configured
+    # version; clients cannot supply their own (ConsentGrantRequest forbids it).
+    canonical = consent_text_for(request.consent_type.value, request.locale)
+    if canonical is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No canonical consent text for this purpose and locale",
+        )
+    consent_text = canonical["body"]
     consent = record_consent(
         db,
         participant_id=participant_id,

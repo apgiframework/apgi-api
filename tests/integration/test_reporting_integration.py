@@ -85,7 +85,7 @@ def _run_one_session(
     participant_id = participant.post("/v1/participants", json={}).json()["participant_id"]
     participant.post(
         f"/v1/participants/{participant_id}/consents",
-        json={"consent_type": "research_participation", "consent_text": "I agree."},
+        json={"consent_type": "research_participation"},
     )
     session_resp = participant.post(
         "/v1/participant-sessions",

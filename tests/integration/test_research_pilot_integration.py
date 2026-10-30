@@ -179,7 +179,6 @@ class TestParticipantAndConsent:
             f"/v1/participants/{participant_id}/consents",
             json={
                 "consent_type": "research_participation",
-                "consent_text": "I agree to participate.",
             },
         )
         assert grant_resp.status_code == 201, grant_resp.text
@@ -250,7 +249,7 @@ class TestTrialIngestionRequiresConsent:
 
         participant_client.post(
             f"/v1/participants/{participant_id}/consents",
-            json={"consent_type": "research_participation", "consent_text": "I agree."},
+            json={"consent_type": "research_participation"},
         )
 
         session_resp = participant_client.post(
@@ -378,7 +377,7 @@ class TestTrialIngestionRequiresConsent:
         ]
         participant_client.post(
             f"/v1/participants/{participant_id}/consents",
-            json={"consent_type": "research_participation", "consent_text": "I agree."},
+            json={"consent_type": "research_participation"},
         )
 
         first = participant_client.post(
@@ -392,3 +391,51 @@ class TestTrialIngestionRequiresConsent:
 
         assert first["session_index"] == 1
         assert second["session_index"] == 2
+
+
+class TestConsentCompletion:
+    def test_client_supplied_consent_text_is_rejected(self, participant_client: TestClient) -> None:
+        pid = participant_client.post("/v1/participants", json={}).json()["participant_id"]
+        resp = participant_client.post(
+            f"/v1/participants/{pid}/consents",
+            json={"consent_type": "research_participation", "consent_text": "my own text"},
+        )
+        assert resp.status_code == 422
+
+    def test_revoke_closes_every_open_grant(
+        self, participant_client: TestClient, db_session: Session
+    ) -> None:
+        from app.database.models import Consent
+
+        pid = participant_client.post("/v1/participants", json={}).json()["participant_id"]
+        url = f"/v1/participants/{pid}/consents"
+        for _ in range(2):
+            assert (
+                participant_client.post(url, json={"consent_type": "recontact"}).status_code == 201
+            )
+        assert (
+            participant_client.post(f"{url}/revoke", json={"consent_type": "recontact"}).status_code
+            == 204
+        )
+        db_session.expire_all()
+        open_grants = (
+            db_session.query(Consent)
+            .filter(Consent.participant_id == pid, Consent.revoked_at.is_(None))
+            .count()
+        )
+        assert open_grants == 0
+        assert participant_client.get(f"{url}/status").json()["recontact"] is False
+
+    def test_product_only_participant_can_run_a_session(
+        self, researcher_client: TestClient, participant_client: TestClient
+    ) -> None:
+        study_id, battery_id = _create_study_and_battery(researcher_client)
+        pid = participant_client.post("/v1/participants", json={}).json()["participant_id"]
+        participant_client.post(
+            f"/v1/participants/{pid}/consents", json={"consent_type": "product_use"}
+        )
+        resp = participant_client.post(
+            "/v1/participant-sessions",
+            json={"participant_id": pid, "study_id": study_id, "battery_id": battery_id},
+        )
+        assert resp.status_code == 201, resp.text

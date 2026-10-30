@@ -49,7 +49,7 @@ from app.schemas.research import (
     TrialEventResponse,
 )
 from app.services.authorization import Role, get_current_user, has_any_role, log_audit_event
-from app.services.consent import require_consent
+from app.services.consent import require_any_consent
 from app.services.rls import set_rls_context
 from app.services.screening import (
     TIER_CONFIG,
@@ -172,7 +172,9 @@ async def create_participant_session(
     if db.query(Battery).filter(Battery.battery_id == request.battery_id).first() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Battery not found")
 
-    require_consent(db, request.participant_id, ConsentType.RESEARCH_PARTICIPATION)
+    require_any_consent(
+        db, request.participant_id, ConsentType.PRODUCT_USE, ConsentType.RESEARCH_PARTICIPATION
+    )
 
     next_index = (
         db.query(func.max(ParticipantSession.session_index))
@@ -242,7 +244,12 @@ async def ingest_trial_events(
             detail=f"Cannot ingest trials into a session with status {session.status.value}",
         )
 
-    require_consent(db, str(session.participant_id), ConsentType.RESEARCH_PARTICIPATION)
+    require_any_consent(
+        db,
+        str(session.participant_id),
+        ConsentType.PRODUCT_USE,
+        ConsentType.RESEARCH_PARTICIPATION,
+    )
 
     existing_by_id: Dict[Any, Any] = {
         t.event_id: t

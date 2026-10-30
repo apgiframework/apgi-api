@@ -58,12 +58,6 @@ class ConsentGrantRequest(BaseModel):
     model_config = _FORBID_EXTRA
 
     consent_type: ConsentType
-    consent_text: Optional[str] = Field(
-        None,
-        min_length=1,
-        description="Legacy: client-supplied text. Omit to record the canonical server-served "
-        "text for the configured version (GET /v1/consent-texts).",
-    )
     locale: str = Field("en", min_length=2, max_length=10)
 
 

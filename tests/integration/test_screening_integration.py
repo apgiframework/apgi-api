@@ -38,7 +38,7 @@ def _session(
     pid = c.post("/v1/participants", json={}).json()["participant_id"]
     c.post(
         f"/v1/participants/{pid}/consents",
-        json={"consent_type": "research_participation", "consent_text": "ok"},
+        json={"consent_type": "research_participation"},
     )
     body: dict[str, Any] = {"participant_id": pid, "study_id": study_id, "battery_id": battery_id}
     if fp:

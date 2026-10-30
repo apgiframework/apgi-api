@@ -46,12 +46,27 @@ def record_consent(
     return consent
 
 
-def revoke_consent(db: Session, participant_id: str, consent_type: ConsentType) -> None:
-    """Revoke the currently-effective consent of a given type, if any."""
-    current = _effective_consent(db, participant_id, consent_type)
-    if current is not None:
-        current.revoked_at = datetime.now(timezone.utc)  # type: ignore[assignment]
+def revoke_consent(db: Session, participant_id: str, consent_type: ConsentType) -> int:
+    """Close every open grant of `consent_type`; returns how many were closed.
+
+    Closing all of them (not just the latest) guarantees an older grant can
+    never become the effective one again after a revoke.
+    """
+    now = datetime.now(timezone.utc)
+    open_grants = (
+        db.query(Consent)
+        .filter(
+            Consent.participant_id == participant_id,
+            Consent.consent_type == consent_type,
+            Consent.revoked_at.is_(None),
+        )
+        .all()
+    )
+    for grant in open_grants:
+        grant.revoked_at = now  # type: ignore[assignment]
+    if open_grants:
         db.commit()
+    return len(open_grants)
 
 
 def _effective_consent(
@@ -112,3 +127,24 @@ def require_consent(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Missing or outdated consent: {', '.join(missing)}",
         )
+
+
+def require_any_consent(
+    db: Session,
+    participant_id: str,
+    *consent_types: ConsentType,
+    require_current_version: bool = True,
+) -> None:
+    """Raise 403 unless at least one listed consent type is currently active.
+
+    Lets the product run on PRODUCT_USE alone: research participation is an
+    additional, independent purpose, not a prerequisite for using the product.
+    """
+    if any(
+        has_active_consent(db, participant_id, ct, require_current_version) for ct in consent_types
+    ):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"Missing or outdated consent: one of {', '.join(ct.value for ct in consent_types)}",
+    )

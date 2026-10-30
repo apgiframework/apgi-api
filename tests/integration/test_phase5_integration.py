@@ -66,7 +66,7 @@ def _consented_participant(client: TestClient) -> str:
     participant_id = client.post("/v1/participants", json={}).json()["participant_id"]
     client.post(
         f"/v1/participants/{participant_id}/consents",
-        json={"consent_type": "research_participation", "consent_text": "I agree."},
+        json={"consent_type": "research_participation"},
     )
     return participant_id
 
