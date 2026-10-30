@@ -17,6 +17,14 @@ from app.routes import ops
 from app.services import job_tracker, ops_alerts
 
 
+@pytest.fixture(autouse=True)
+def _platform(request: Any) -> Generator[None, None, None]:
+    """Default: platform health reads nothing (unknown). Tests may override via ``PLATFORM``."""
+    snap = getattr(request.module, "PLATFORM", {})
+    with patch("app.services.platform_health.snapshot", lambda force=False: snap):
+        yield
+
+
 @pytest.fixture
 def db() -> Generator[Any, None, None]:
     engine = create_engine(

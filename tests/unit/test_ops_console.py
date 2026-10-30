@@ -17,6 +17,29 @@ from app.routes import ops
 from app.services import ops_monitor
 
 
+@pytest.fixture(autouse=True)
+def _no_live_probes() -> Generator[None, None, None]:
+    """Platform health would otherwise probe the real DB/broker/GCP."""
+    from app.services import platform_health
+
+    empty = {
+        "success_ratio_1h": None,
+        "error_ratio_5xx": None,
+        "p95_latency_ms": None,
+        "request_count_1h": None,
+        "last_backup_at": None,
+        "last_restore_drill_at": None,
+        "database_latency_ms": None,
+        "celery_workers_online": None,
+        "configured": {},
+        "errors": [],
+        "source": "",
+        "as_of": {"local_probes": None},
+    }
+    with patch.object(platform_health, "snapshot", lambda force=False: empty):
+        yield
+
+
 @pytest.fixture
 def test_db_session() -> Generator[Any, None, None]:
     """In-memory SQLite shared across connections (StaticPool) with every table created."""
@@ -66,13 +89,13 @@ def test_empty_database_reports_unknown_not_zero(client: TestClient) -> None:
     data = client.get("/v1/ops/home").json()["data"]
     assert [f["state"] for f in data["freshness"]] == ["unknown"] * 4
     assert data["quality"]["completion"]["completion_rate"] is None
-    assert data["infrastructure"]["availability"] is None
+    assert data["infrastructure"]["success_ratio_1h"] is None
     assert data["origin"]["synthetic"] == 0 and data["origin"]["unclassified"] == 0
 
 
 def test_envelope_lists_as_of_per_source(client: TestClient) -> None:
     body = client.get("/v1/ops/home").json()
-    assert set(body["as_of"]) == set(ops_monitor.SOURCE_INTERVALS)
+    assert set(ops_monitor.SOURCE_INTERVALS) <= set(body["as_of"])
 
 
 def test_failed_task_listed_and_stuck_upload_retryable(

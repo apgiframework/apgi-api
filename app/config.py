@@ -192,6 +192,8 @@ class Settings:
         ]
         self.alert_quarantine_threshold: int = int(os.getenv("ALERT_QUARANTINE_THRESHOLD", "5"))
         self.alert_failed_task_threshold: int = int(os.getenv("ALERT_FAILED_TASK_THRESHOLD", "5"))
+        self.alert_5xx_ratio: float = float(os.getenv("ALERT_5XX_RATIO", "0.05"))
+        self.alert_backup_max_age_hours: int = int(os.getenv("ALERT_BACKUP_MAX_AGE_HOURS", "36"))
         self.alert_reminder_hours: int = int(os.getenv("ALERT_REMINDER_HOURS", "24"))
 
         # Email Settings for notifications and password reset
@@ -322,6 +324,10 @@ class Settings:
             "BIGQUERY_DEIDENTIFIED_DATASET"
         )
         self.gcp_project_id: Optional[str] = os.getenv("GCP_PROJECT_ID")
+        # Read-only platform-health sources for the console (app/services/platform_health.py)
+        self.cloud_run_service: Optional[str] = os.getenv("CLOUD_RUN_SERVICE")
+        self.cloud_sql_instance: Optional[str] = os.getenv("CLOUD_SQL_INSTANCE")
+        self.platform_health_ttl_s: int = int(os.getenv("PLATFORM_HEALTH_TTL_S", "60"))
 
         # Private bucket receiving acquisition chunks from apgi-system via
         # signed URLs (app/routes/acquisition.py). Unset disables the feature.

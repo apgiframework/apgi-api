@@ -29,7 +29,7 @@ from app.middleware.alerting import (
     NotificationChannel,
     WebhookNotificationChannel,
 )
-from app.services import job_tracker, ops_monitor
+from app.services import job_tracker, ops_monitor, platform_health
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +132,46 @@ def evaluate_rules(db: Session) -> List[Finding]:
                 "Task failures above threshold",
                 f"{failed_tasks} failed in the last hour (threshold "
                 f"{settings.alert_failed_task_threshold}).",
+            )
+        )
+
+    out.extend(_platform_findings(now))
+    return out
+
+
+def _platform_findings(now: datetime) -> List[Finding]:
+    out: List[Finding] = []
+    snap = platform_health.snapshot()
+    ratio = snap.get("error_ratio_5xx")
+    if (
+        ratio is not None
+        and snap.get("request_count_1h", 0) >= 20
+        and ratio >= settings.alert_5xx_ratio
+    ):
+        out.append(
+            Finding(
+                "api_5xx",
+                "api_5xx",
+                "error",
+                "API 5xx ratio above threshold",
+                f"{ratio:.1%} of {snap['request_count_1h']} requests in the last hour "
+                f"(threshold {settings.alert_5xx_ratio:.1%}).",
+            )
+        )
+    backup = ops_monitor.aware(
+        datetime.fromisoformat(snap["last_backup_at"].replace("Z", "+00:00"))
+        if snap.get("last_backup_at")
+        else None
+    )
+    if backup is not None and now - backup > timedelta(hours=settings.alert_backup_max_age_hours):
+        out.append(
+            Finding(
+                "backup_stale",
+                "backup_stale",
+                "error",
+                "Last successful database backup is too old",
+                f"Last success {ops_monitor.dur_text(int((now - backup).total_seconds()))} ago "
+                f"(limit {settings.alert_backup_max_age_hours}h).",
             )
         )
     return out

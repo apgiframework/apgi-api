@@ -12,7 +12,7 @@ First release scope: operational health, ingestion and job status, failure inves
 | Home panel 3 Data origin | `participant_sessions.data_origin` | synthetic / human-observed / unclassified (NULL, never inferred); links to filtered Catalog; origin filter also scopes panels 1 and 4 |
 | Home panel 4 Scientific quality | sessions, trial events | 4 of 14 indicators measurable: completion, interruption, missing events (sequence gaps), device-tier distribution |
 | Home panel 5 Retention/deletion | none | unknown until the deletion ledger (S3-GOV-04) exists |
-| Home panel 6 Platform health | none | unknown until Cloud Monitoring / Cloud SQL Admin are connected (S2-OPS-02) |
+| Home panel 6 Platform health | local probes; Cloud Monitoring; Cloud SQL Admin | see *Platform health* below; unconfigured or unreadable sources stay unknown |
 | Catalog | sessions, chunk uploads, jobs | search, filters, session timeline |
 | Failures | failed/stuck tasks, quarantined/rejected chunks, unverified chunks, unscored sessions, failed webhooks | grouped, owner role, age, retry |
 
@@ -94,6 +94,24 @@ source. Recommended: record D6 as "Celery now, behind a thin enqueue interface" 
 - Tests (`tests/unit/test_ops_alerts.py`) inject faults and check routing, dedup, acknowledgment, recovery
   and retry. Not done: staging fault injection with real email delivery, overdue-purge alerts (no ledger),
   and severity-based escalation.
+
+## Platform health (batch 5)
+
+`GET /v1/ops/platform` (and Home panel 6). Cached for `PLATFORM_HEALTH_TTL_S` (60 s); every source has a hard 4 s limit
+so a hung broker or API cannot stall the console; failures are listed by source and exception type only.
+
+| Reading | Source | Needs |
+|---|---|---|
+| Request success (non-5xx), 5xx ratio, request count, last hour | Cloud Monitoring `run.googleapis.com/request_count` | `GCP_PROJECT_ID`, `CLOUD_RUN_SERVICE`, role `roles/monitoring.viewer` |
+| p95 latency (worst instance) | `request_latencies`, `ALIGN_PERCENTILE_95` then `REDUCE_MAX` | same |
+| Last successful backup | Cloud SQL Admin `backupRuns` | `GCP_PROJECT_ID`, `CLOUD_SQL_INSTANCE`, role `roles/cloudsql.viewer` |
+| Database round-trip, Celery workers online | in-process probes | none |
+
+Notes: "request success" is a request-based ratio, **not** uptime-check availability; no traffic gives unknown, not 100%;
+worst-instance p95 is conservative, not a fleet-wide percentile. Restore-drill date stays unknown until the recovery record exists.
+New alert rules: 5xx ratio >= `ALERT_5XX_RATIO` (5%, min 20 requests) and last backup older than `ALERT_BACKUP_MAX_AGE_HOURS` (36).
+**Not verified against a live GCP project**: the REST calls are covered by unit tests with fake responses only; check
+the filters and IAM in staging. Cloud Tasks queue age is not applicable while the queue is Celery.
 
 ## Use
 

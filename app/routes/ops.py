@@ -9,12 +9,13 @@ import logging
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
 from app.models.schemas import ErrorResponse
-from app.services import ops_monitor
+from app.services import ops_monitor, platform_health
 from app.services.authorization import (
     Permission,
     TokenPayload,
@@ -47,6 +48,9 @@ async def ops_home(
 ) -> Dict[str, Any]:
     data = ops_monitor.home(db, origin)
     as_of = data.pop("as_of")
+    infra = await run_in_threadpool(platform_health.snapshot)
+    data["infrastructure"] = infra
+    as_of.update(infra.get("as_of", {}))
     return _envelope(data, as_of)
 
 
@@ -154,3 +158,11 @@ async def ops_ack_alert(
         details={"rule": alert.rule},
     )
     return _envelope({"alert_id": alert_id, "status": alert.status})
+
+
+@router.get(
+    "/platform", summary="Platform health readings (Cloud Monitoring, backups, local probes)"
+)
+async def ops_platform(refresh: bool = Query(False)) -> Dict[str, Any]:
+    snap = await run_in_threadpool(platform_health.snapshot, refresh)
+    return _envelope(snap, snap["as_of"])

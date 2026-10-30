@@ -180,12 +180,16 @@
         ]),
         h("section", { class: "panel", "aria-labelledby": "p6" }, [
           h("h2", { id: "p6" }, "6 · Platform health"),
-          kv("Availability", val(d.infrastructure.availability)),
-          kv("p95 latency", val(d.infrastructure.p95_latency_ms, function (v) { return v + " ms"; })),
+          kv("Request success, last hour (non-5xx)", val(d.infrastructure.success_ratio_1h, pct)),
+          kv("Requests, last hour", val(d.infrastructure.request_count_1h)),
+          kv("p95 latency (worst instance)", val(d.infrastructure.p95_latency_ms, function (v) { return v + " ms"; })),
           kv("5xx ratio", val(d.infrastructure.error_ratio_5xx, pct)),
-          kv("Last backup", val(d.infrastructure.last_backup_at, when)),
+          kv("Database round-trip", val(d.infrastructure.database_latency_ms, function (v) { return v + " ms"; })),
+          kv("Celery workers online", val(d.infrastructure.celery_workers_online)),
+          kv("Last successful backup", val(d.infrastructure.last_backup_at, when)),
           kv("Last restore drill", val(d.infrastructure.last_restore_drill_at, when)),
-          h("p", { class: "muted" }, "Source: " + d.infrastructure.source)
+          h("p", { class: "muted" }, d.infrastructure.source),
+          d.infrastructure.errors.length ? h("p", { class: "error", role: "alert" }, "Unreadable: " + d.infrastructure.errors.join("; ")) : null
         ])
       ];
 
