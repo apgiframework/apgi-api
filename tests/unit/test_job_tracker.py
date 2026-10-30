@@ -1,6 +1,7 @@
 """Durable job tracking: enqueue records, lease expiry, dead-lettering, retry."""
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Any, Generator
 from unittest.mock import patch
 
@@ -16,6 +17,7 @@ from app.main import create_app
 from app.middleware.correlation import correlation_id_context
 from app.routes import ops
 from app.services import job_tracker, ops_monitor
+from app.services.authorization import get_current_user
 
 
 @pytest.fixture
@@ -97,8 +99,9 @@ def test_track_never_breaks_work_when_tracking_unavailable() -> None:
 def client(db: Any) -> Generator[TestClient, None, None]:
     app = create_app(test_mode=True)
     app.dependency_overrides[get_db] = lambda: db
-    for dep in ops.router.dependencies:
-        app.dependency_overrides[dep.dependency] = lambda: None
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(user_id="admin-1")
+    for guard in ops.GUARDS:
+        app.dependency_overrides[guard] = lambda: None
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
 

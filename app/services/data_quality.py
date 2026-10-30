@@ -32,7 +32,7 @@ from app.database.models import (
     TrialEvent,
 )
 from app.services import job_tracker
-from app.services.ops_monitor import with_origin
+from app.services.ops_monitor import research_scope, with_origin
 
 MAX_WAVES = 4
 
@@ -82,7 +82,9 @@ def compute(
     battery_id: Optional[str] = None,
     origin: Optional[str] = None,
 ) -> Dict[str, Any]:
-    sessions: List[ParticipantSession] = _base_query(db, study_id, battery_id, origin).all()
+    in_filter = _base_query(db, study_id, battery_id, origin)
+    sessions: List[ParticipantSession] = research_scope(in_filter).all()
+    withheld = in_filter.count() - len(sessions)
     ids = {s.participant_session_id for s in sessions}
     total = len(sessions)
     out: List[Dict[str, Any]] = []
@@ -447,6 +449,9 @@ def compute(
     return {
         "filters": {"study_id": study_id, "battery_id": battery_id, "origin": origin},
         "session_count": total,
+        "withheld_sessions": withheld,
+        "withheld_reason": "Erased participants, and non-synthetic sessions without active "
+        "research-participation consent, are excluded from research-purpose views.",
         "indicators": out,
         "available": available,
         "planned": 14,

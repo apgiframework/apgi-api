@@ -1,6 +1,7 @@
 """Unit tests for the /v1/ops read API and the /console static host."""
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Any, Generator
 from unittest.mock import patch
 
@@ -15,6 +16,7 @@ from app.database.models import AcquisitionUpload, Base
 from app.main import create_app
 from app.routes import ops
 from app.services import ops_monitor
+from app.services.authorization import get_current_user
 
 
 @pytest.fixture(autouse=True)
@@ -59,8 +61,9 @@ def test_db_session() -> Generator[Any, None, None]:
 def client(test_db_session: Any) -> Generator[TestClient, None, None]:
     app = create_app(test_mode=True)
     app.dependency_overrides[get_db] = lambda: test_db_session
-    for dep in ops.router.dependencies:
-        app.dependency_overrides[dep.dependency] = lambda: None
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(user_id="admin-1")
+    for guard in ops.GUARDS:
+        app.dependency_overrides[guard] = lambda: None
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
 
@@ -140,7 +143,12 @@ def test_catalog_search_and_filter(client: TestClient, test_db_session: Any) -> 
 
 
 def test_session_detail_404(client: TestClient) -> None:
-    assert client.get("/v1/ops/catalog/session/nope").status_code == 404
+    assert (
+        client.get(
+            "/v1/ops/catalog/session/nope", params={"purpose": "operations_support"}
+        ).status_code
+        == 404
+    )
 
 
 def test_ops_requires_authentication() -> None:
@@ -217,7 +225,10 @@ def test_catalog_origin_filter_and_detail(client: TestClient, test_db_session: A
     _session(test_db_session, None)
     res = client.get("/v1/ops/catalog", params={"origin": "unclassified"}).json()["data"]
     assert res["total"] == 1 and res["items"][0]["origin"] is None
-    detail = client.get(f"/v1/ops/catalog/session/{ps.participant_session_id}").json()["data"]
+    detail = client.get(
+        f"/v1/ops/catalog/session/{ps.participant_session_id}",
+        params={"purpose": "operations_support"},
+    ).json()["data"]
     assert detail["origin"] == "synthetic" and detail["correlation_id"] == "corr-12345678"
 
 
@@ -261,6 +272,19 @@ def test_correlation_id_minted_echoed_and_sanitised() -> None:
 # ---------------------------------------------------------------------------
 # Data-quality indicators
 # ---------------------------------------------------------------------------
+
+
+def _research_consent(participant_id: str, version: Any = None, revoked: bool = False) -> Any:
+    from app.config import settings
+    from app.database.models import Consent, ConsentType
+
+    return Consent(
+        participant_id=participant_id,
+        consent_type=ConsentType.RESEARCH_PARTICIPATION,
+        version=version or settings.consent_current_versions["research_participation"],
+        consent_text_hash="h" * 64,
+        revoked_at=datetime.now(timezone.utc) if revoked else None,
+    )
 
 
 def _quality_world(db: Any) -> Any:
@@ -341,6 +365,8 @@ def _quality_world(db: Any) -> Any:
                 seq_no=seq,
             )
         )
+    for person in people:
+        db.add(_research_consent(person.participant_id))
     db.add(
         StudyEnrollment(
             participant_id=people[0].participant_id, study_id=study.study_id, partition="holdout"
@@ -477,3 +503,222 @@ def test_session_create_schema_validates_client_metadata() -> None:
     ):
         with _pytest.raises(ValidationError):
             R(**base, **bad)
+
+
+# ---------------------------------------------------------------------------
+# Governance: scopes, purpose-bound reads, audit, withdrawal
+# ---------------------------------------------------------------------------
+
+
+def _session_for(db: Any, origin: Any, consent: Any = "current", erased: bool = False) -> Any:
+    """One session whose participant has the given consent state ('current'|'revoked'|'old'|None)."""
+    from app.database.models import Battery, Participant, ParticipantSession, Study
+
+    study = Study(name="S")
+    db.add(study)
+    db.commit()
+    battery = Battery(study_id=study.study_id, name="B", version="1", instrument_schema={})
+    person = Participant(is_deleted=erased)
+    db.add_all([battery, person])
+    db.commit()
+    if consent == "current":
+        db.add(_research_consent(person.participant_id))
+    elif consent == "revoked":
+        db.add(_research_consent(person.participant_id, revoked=True))
+    elif consent == "old":
+        db.add(_research_consent(person.participant_id, version="0.0.1-old"))
+    ps = ParticipantSession(
+        participant_id=person.participant_id,
+        study_id=study.study_id,
+        battery_id=battery.battery_id,
+        data_origin=origin,
+        status="completed",
+    )
+    db.add(ps)
+    db.commit()
+    return ps
+
+
+@pytest.mark.parametrize(
+    "origin,consent,erased,visible",
+    [
+        ("human_observed", "current", False, True),
+        ("human_observed", "revoked", False, False),  # withdrawal
+        ("human_observed", None, False, False),  # never consented
+        ("human_observed", "old", False, False),  # consent text changed, not re-granted
+        (None, None, False, False),  # unclassified is not assumed synthetic
+        ("synthetic", None, False, True),  # no person, no consent needed
+        ("synthetic", "revoked", True, False),  # erased always leaves
+        ("human_observed", "current", True, False),
+    ],
+)
+def test_research_views_respect_withdrawal(
+    client: TestClient, test_db_session: Any, origin: Any, consent: Any, erased: bool, visible: bool
+) -> None:
+    _session_for(test_db_session, origin, consent, erased)
+    data = client.get("/v1/ops/data-quality").json()["data"]
+    assert data["session_count"] == (1 if visible else 0)
+    assert data["withheld_sessions"] == (0 if visible else 1)
+    home = client.get("/v1/ops/home").json()["data"]["quality"]["completion"]
+    assert home["total"] == (1 if visible else 0)
+
+
+def test_withdrawal_does_not_change_factual_origin(
+    client: TestClient, test_db_session: Any
+) -> None:
+    ps = _session_for(test_db_session, "human_observed", "revoked")
+    test_db_session.refresh(ps)
+    assert ps.data_origin == "human_observed"
+
+
+def test_erased_session_is_gone_from_catalog_and_detail(
+    client: TestClient, test_db_session: Any
+) -> None:
+    ps = _session_for(test_db_session, "human_observed", "current", erased=True)
+    assert client.get("/v1/ops/catalog", params={"kind": "session"}).json()["data"]["total"] == 0
+    r = client.get(
+        f"/v1/ops/catalog/session/{ps.participant_session_id}", params={"purpose": "research_qa"}
+    )
+    assert r.status_code == 404
+
+
+def test_operational_views_keep_working_after_research_withdrawal(
+    client: TestClient, test_db_session: Any
+) -> None:
+    """Declining research does not stop product processing: the session stays operable."""
+    ps = _session_for(test_db_session, "human_observed", "revoked")
+    assert client.get("/v1/ops/catalog", params={"kind": "session"}).json()["data"]["total"] == 1
+    r = client.get(
+        f"/v1/ops/catalog/session/{ps.participant_session_id}",
+        params={"purpose": "operations_support"},
+    )
+    assert r.status_code == 200
+
+
+def test_session_read_requires_purpose_and_is_audited(
+    client: TestClient, test_db_session: Any
+) -> None:
+    from app.database.models import AuditLog
+
+    ps = _session_for(test_db_session, "synthetic", None)
+    url = f"/v1/ops/catalog/session/{ps.participant_session_id}"
+    assert client.get(url).status_code == 422
+    assert client.get(url, params={"purpose": "curiosity"}).status_code == 422
+    assert test_db_session.query(AuditLog).count() == 0
+    assert client.get(url, params={"purpose": "security_investigation"}).status_code == 200
+    row = test_db_session.query(AuditLog).one()
+    assert row.action == "ops:session_read" and row.resource_id == ps.participant_session_id
+    assert row.user_id == "admin-1" and row.details["purpose"] == "security_investigation"
+
+
+def test_catalog_and_quality_reads_are_audited_without_results(
+    client: TestClient, test_db_session: Any
+) -> None:
+    from app.database.models import AuditLog
+
+    client.get("/v1/ops/catalog", params={"q": "secret-term"})
+    client.get("/v1/ops/data-quality")
+    client.get("/v1/ops/failures")
+    rows = {r.action: r for r in test_db_session.query(AuditLog)}
+    assert {"ops:catalog_search", "ops:data_quality_read", "ops:failures_read"} <= set(rows)
+    assert rows["ops:catalog_search"].details["q_given"] is True
+    assert "secret-term" not in str(rows["ops:catalog_search"].details)
+
+
+def test_read_is_refused_when_audit_cannot_be_written(
+    client: TestClient, test_db_session: Any
+) -> None:
+    ps = _session_for(test_db_session, "synthetic", None)
+    with patch.object(test_db_session, "commit", side_effect=RuntimeError("audit store down")):
+        r = client.get(
+            f"/v1/ops/catalog/session/{ps.participant_session_id}",
+            params={"purpose": "research_qa"},
+        )
+    assert r.status_code == 500 and "events" not in r.text
+
+
+# ---- access-denial matrix: every role x every /v1/ops route ----
+
+
+def _routes() -> Any:
+    out = []
+    for route in ops.router.routes:
+        for method in route.methods - {"HEAD", "OPTIONS"}:
+            path = (
+                route.path.replace("{job_id}", "x")
+                .replace("{session_id}", "x")
+                .replace("{alert_id}", "x")
+                .replace("{enrollment_id}", "x")
+            )
+            out.append((method, path))
+    return out
+
+
+def _bare_client(roles: Any) -> Any:
+    from app.services.authorization import get_current_user
+
+    app = create_app(test_mode=True)
+    if roles is not None:
+        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+            user_id="u", username="u", roles=roles, permissions=None
+        )
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_route_scopes_are_pinned() -> None:
+    """Adding a /v1/ops route must be a conscious choice of scope: update this table with it."""
+    assert [d.dependency for d in ops.router.dependencies] == [ops.READ]
+    guards = {}
+    for route in ops.router.routes:
+        extra = {d.call for d in route.dependant.dependencies} & {ops.WRITE, ops.QUALITY}
+        guards[route.path] = extra
+    write = {p for p, g in guards.items() if g == {ops.WRITE}}
+    quality = {p for p, g in guards.items() if g == {ops.QUALITY}}
+    assert write == {
+        "/v1/ops/jobs/{job_id}:retry",
+        "/v1/ops/sessions/{session_id}:classify",
+        "/v1/ops/alerts/{alert_id}:ack",
+        "/v1/ops/enrollments/{enrollment_id}:partition",
+    }
+    assert quality == {"/v1/ops/data-quality", "/v1/ops/studies"}
+    assert len(guards) == 13
+
+
+@pytest.mark.parametrize("roles", [["researcher"], ["viewer"], [], ["unknown-role"]])
+def test_non_admin_roles_are_denied_on_every_ops_route(roles: Any) -> None:
+    with _bare_client(roles) as c:
+        for method, path in _routes():
+            r = c.request(method, path, params={"purpose": "research_qa"}, json={})
+            assert r.status_code in (401, 403), (roles, method, path, r.status_code)
+
+
+def test_unauthenticated_requests_are_denied_on_every_ops_route() -> None:
+    with _bare_client(None) as c:
+        for method, path in _routes():
+            r = c.request(method, path, params={"purpose": "research_qa"}, json={})
+            assert r.status_code in (401, 403), (method, path, r.status_code)
+
+
+def test_api_key_with_system_admin_alone_no_longer_opens_the_console() -> None:
+    from app.services.authorization import get_current_user
+
+    app = create_app(test_mode=True)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        user_id="k", username="k", roles=[], permissions=["system:admin"]
+    )
+    with TestClient(app, raise_server_exceptions=False) as c:
+        assert c.get("/v1/ops/home").status_code in (401, 403)
+
+
+def test_scopes_are_separate_read_cannot_write_or_see_quality() -> None:
+    from app.services.authorization import get_current_user
+
+    app = create_app(test_mode=True)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        user_id="k", username="k", roles=[], permissions=["ops:read"]
+    )
+    with TestClient(app, raise_server_exceptions=False) as c:
+        assert c.post("/v1/ops/jobs/job:x:retry").status_code in (401, 403)
+        assert c.post("/v1/ops/alerts/x:ack").status_code in (401, 403)
+        assert c.get("/v1/ops/data-quality").status_code in (401, 403)
+        assert c.get("/v1/ops/studies").status_code in (401, 403)

@@ -72,6 +72,11 @@ class Permission(str, Enum):
     USER_DELETE = "user:delete"
     USER_ADMIN = "user:admin"  # Full user administration
 
+    # Operations console scopes (S3-GOV-01). Deliberately separate from SYSTEM_ADMIN.
+    OPS_READ = "ops:read"  # aggregate operational views and failure lists
+    OPS_WRITE = "ops:write"  # retry jobs, acknowledge alerts, classify origin, assign partitions
+    OPS_QUALITY = "ops:quality"  # scientific data-quality indicators
+
 
 # Role to permissions mapping
 ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
@@ -98,6 +103,9 @@ ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
         Permission.USER_UPDATE,
         Permission.USER_DELETE,
         Permission.USER_ADMIN,
+        Permission.OPS_READ,
+        Permission.OPS_WRITE,
+        Permission.OPS_QUALITY,
     },
     Role.RESEARCHER: {
         # Researchers can create and manage their own sessions and tasks

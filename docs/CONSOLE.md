@@ -150,6 +150,39 @@ small-cell suppression for tiny strata, and the Track A/B filter.
 - Not decided here (a scientific call, not an engineering one): *who* is assigned to which partition and in what ratio.
   The plan's 70/30 holdout and by-participant stratification are not automated; no assignment is made automatically.
 
+## Governance (batch 8, S3-GOV-01/02/03 slice)
+
+**Release dependency.** The plan says no production console route opens on human data until isolation, purpose-specific
+authorization, sensitive-access auditing, exposure gates and withdrawal handling pass their tests. This batch covers
+the parts below; the **gaps listed after it must be closed first**.
+
+*Scopes.* New permissions `ops:read`, `ops:write`, `ops:quality`, held by the admin role only. Every `/v1/ops` route needs
+`ops:read`; state changes (retry, acknowledge, classify origin, assign partition) need `ops:write`; study-level scientific
+data (`data-quality`, `studies`) needs `ops:quality`. `system:admin` alone (e.g. an API key) **no longer** opens the console.
+`test_route_scopes_are_pinned` forces any new route to declare its scope.
+
+*Purpose-bound, audited reads.* A session record needs `purpose` (`operations_support` | `research_qa` |
+`security_investigation`); the console asks before opening one. Session reads, catalog searches (filters only, never the
+search text), failure-list reads and data-quality reads write signed audit entries with actor, purpose and scope. The audit
+write is **not** best-effort: if it fails the read returns 500 instead of being served unaudited.
+
+*Withdrawal.* Research-purpose views (data-quality and Home panel 4) exclude (a) erased participants and (b) any session
+that is not synthetic and lacks an active, current-version research-participation consent; unclassified sessions are not
+assumed synthetic. The number withheld is shown. Origin is never changed by consent state. Operational views keep working
+after research is declined or withdrawn (product processing continues); erased participants disappear from every view.
+
+*Access-denial suite.* `researcher`, `viewer`, unknown role, no roles and unauthenticated requests are refused on
+every `/v1/ops` route; a read-only key cannot write or see quality data.
+
+**Not done (still blocking human-data release):**
+- The plan's eight roles. Only admin/researcher/viewer exist; researchers get **no** console scope on purpose, because
+  there is no study-ownership model, so granting `ops:quality` would let one researcher read every study.
+- Study-level row security (S2-CAT-01 RLS) and cross-study isolation tests; today access is all-or-nothing admin.
+- Exposure gates (`ExposureGate.emit()`) on console responses; responses are aggregates plus session IDs, but no gate runs.
+- Withdrawal during in-flight work (workers re-checking consent before upload, scoring, export): the job code is unchanged.
+- Aggregate-only operator endpoints (no session IDs) for a lesser operator role; small-cell suppression.
+- Purpose is declared by the user, not authorised against a grant; it is recorded, not enforced.
+
 ## Use
 
 Sign in at `/console` with an admin account. Tests: `pytest tests/unit/test_ops_console.py`.

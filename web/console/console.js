@@ -257,12 +257,29 @@
     return "#/catalog?" + sp.toString();
   }
 
-  function renderSession(id) {
-    return api("/v1/ops/catalog/session/" + encodeURIComponent(id)).then(function (res) {
+  var PURPOSES = [["operations_support", "Operations support (fixing a failure)"],
+    ["research_qa", "Research quality assurance"], ["security_investigation", "Security investigation"]];
+  function renderSession(id, params) {
+    var purpose = params.get("purpose");
+    if (!purpose) {
+      // Restricted record: a purpose is required and is recorded with the access.
+      var sel = h("select", { id: "purpose" }, PURPOSES.map(function (o) { return h("option", { value: o[0] }, o[1]); }));
+      show(h("form", { class: "panel login", onsubmit: function (e) {
+        e.preventDefault();
+        location.hash = "#/session/" + encodeURIComponent(id) + "?purpose=" + sel.value;
+      } }, [h("h1", {}, "Open session record"),
+        h("p", { class: "muted" }, "Why do you need this record? Your answer, your identity and the session are logged."),
+        h("label", {}, ["Purpose", sel]),
+        h("button", { class: "btn", type: "submit" }, "Open record"),
+        h("p", {}, h("a", { href: "#/catalog" }, "Cancel"))]));
+      return Promise.resolve();
+    }
+    return api("/v1/ops/catalog/session/" + encodeURIComponent(id) + "?purpose=" + encodeURIComponent(purpose)).then(function (res) {
       var d = res.data;
       show(h("div", {}, [
         h("p", {}, h("a", { href: "#/catalog" }, "‹ Catalog")),
         h("h1", {}, "Session " + d.id),
+        h("p", { class: "muted" }, "Opened for: " + purpose.replace(/_/g, " ") + ". This access is recorded."),
         h("div", { class: "panel" }, [
           kv("Status", h("span", { class: "val" }, d.status)),
           kv("Study", h("span", { class: "val" }, d.study_id)),
@@ -355,6 +372,7 @@
           h("h2", {}, [i.n + " · " + i.name + "  ", pill(i.status, cls[i.status])])].concat(body));
       });
       show(h("div", {}, [h("h1", {}, "Data quality"),
+        d.withheld_sessions ? h("div", { class: "banner", role: "status" }, d.withheld_sessions + " session(s) are withheld from this research view (participant erased, or no active research consent). " + "Operational views are unaffected.") : null,
         h("p", { class: "muted" }, d.available + " of " + d.planned + " indicators have a data source; " + d.session_count + " sessions in scope. Aggregates only, with no participant or session identifiers. Unmeasured indicators are shown rather than hidden."),
         form, h("div", { class: "grid" }, cards)]));
     });
@@ -397,7 +415,7 @@
     });
     var p;
     if (name === "catalog") p = renderCatalog(params);
-    else if (name === "session") p = renderSession(decodeURIComponent(path.split("/")[2] || ""));
+    else if (name === "session") p = renderSession(decodeURIComponent(path.split("/")[2] || ""), params);
     else if (name === "failures") p = renderFailures();
     else if (name === "alerts") p = renderAlerts();
     else if (name === "quality") p = renderQuality(params);
