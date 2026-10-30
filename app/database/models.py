@@ -1299,7 +1299,9 @@ class TrialEvent(Base):  # type: ignore[misc, valid-type]
             name="uq_trial_events_session_task_index",
         ),
         UniqueConstraint("participant_session_id", "seq_no", name="uq_trial_events_session_seq"),
-        UniqueConstraint("participant_session_id", "event_id", name="uq_trial_events_session_event"),
+        UniqueConstraint(
+            "participant_session_id", "event_id", name="uq_trial_events_session_event"
+        ),
         Index("idx_trial_events_session", "participant_session_id"),
     )
 
