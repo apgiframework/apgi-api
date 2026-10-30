@@ -1013,6 +1013,12 @@ class StudyEnrollment(Base):  # type: ignore[misc, valid-type]
     form_order = Column(
         JSON, nullable=True, comment="Counterbalanced parallel-form order fixed at enrolment"
     )
+    partition = Column(
+        String(16),
+        nullable=True,
+        index=True,
+        comment="development | confirmation | holdout; set once, per participant",
+    )
 
     participant = relationship("Participant", back_populates="enrollments")
     study = relationship("Study", back_populates="enrollments")
@@ -1203,6 +1209,11 @@ class ParticipantSession(Base):  # type: ignore[misc, valid-type]
         index=True,
         comment="X-APGI-Correlation-Id of the creating request",
     )
+    administration_mode = Column(
+        String(24), nullable=True, index=True, comment="web | native_macos; NULL = not reported"
+    )
+    app_version = Column(String(40), nullable=True, comment="Client app/instrument build version")
+    browser_family = Column(String(40), nullable=True, comment="Client-reported browser family")
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(

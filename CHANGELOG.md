@@ -13,6 +13,14 @@ the apgiframework/apgi-framework release they ship alongside.
   (`ops.sweep_jobs`); Celery now registers the scoring and erasure tasks.
 - Operational alerts (`ops_alerts`): stale sources, dead/lost jobs, quarantine and task-failure rates,
   with dedup, acknowledgment, reminders and recovery notices; Alerts screen in the console.
+- Platform-health panel: Cloud Monitoring request metrics, Cloud SQL backup status and local probes
+  (`GET /v1/ops/platform`), plus 5xx-ratio and stale-backup alert rules.
+- Data-quality screen and `GET /v1/ops/data-quality`: the fourteen scientific indicators with explicit
+  measured / partial / unmeasured status and study, protocol and origin filters.
+- Session metadata (administration mode, app version, browser family) and set-once enrollment partitions
+  (migration `add_session_metadata`); data-quality indicators 6 and 11 now report.
+- Console governance: separate `ops:read|write|quality` scopes (admin only), purpose-bound audited session reads
+  that fail closed, withdrawal-aware research views, and an access-denial test matrix.
 - Server-side effort/fraud/validity screening (`app/services/screening.py`):
   fast responses, invariant responding, straight-lining/zig-zagging, failed
   attention checks, form-layer bot signals, and duplicate device-fingerprint /

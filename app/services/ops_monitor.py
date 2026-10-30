@@ -14,13 +14,17 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database.models import (
     AcquisitionUpload,
+    Consent,
+    ConsentType,
     OpsAlert,
     OpsJob,
+    Participant,
     ParticipantSession,
     ParticipantSessionStatus,
     Task,
@@ -100,6 +104,40 @@ def with_origin(query: Any, origin: Optional[str]) -> Any:
     if origin in ("synthetic", "human_observed"):
         return query.filter(ParticipantSession.data_origin == origin)
     return query
+
+
+def erased_ids() -> Any:
+    """Participants who exercised erasure; their sessions leave every console view."""
+    return select(Participant.participant_id).where(Participant.is_deleted.is_(True))
+
+
+def research_consented_ids() -> Any:
+    """Participants with an unrevoked, current-version research-participation grant."""
+    return select(Consent.participant_id).where(
+        Consent.consent_type == ConsentType.RESEARCH_PARTICIPATION,
+        Consent.revoked_at.is_(None),
+        Consent.version
+        == settings.consent_current_versions[ConsentType.RESEARCH_PARTICIPATION.value],
+    )
+
+
+def not_erased(query: Any) -> Any:
+    return query.filter(~ParticipantSession.participant_id.in_(erased_ids()))
+
+
+def research_scope(query: Any) -> Any:
+    """
+    Sessions that may appear in research-purpose views: not erased, and either
+    synthetic (no person) or backed by active research consent. Unclassified
+    sessions are not assumed synthetic, so they need consent too. Origin is a
+    fact about the data and is never changed by this filter.
+    """
+    return not_erased(query).filter(
+        or_(
+            ParticipantSession.data_origin == "synthetic",
+            ParticipantSession.participant_id.in_(research_consented_ids()),
+        )
+    )
 
 
 def _enum_val(v: Any) -> str:
@@ -235,18 +273,18 @@ def panel_quality(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
     def completion() -> Dict[str, Any]:
         count = func.count(ParticipantSession.participant_session_id)
         done = (
-            with_origin(db.query(count), origin)
+            research_scope(with_origin(db.query(count), origin))
             .filter(ParticipantSession.status == ParticipantSessionStatus.COMPLETED)
             .scalar()
             or 0
         )
         abandoned = (
-            with_origin(db.query(count), origin)
+            research_scope(with_origin(db.query(count), origin))
             .filter(ParticipantSession.status == ParticipantSessionStatus.ABANDONED)
             .scalar()
             or 0
         )
-        total = with_origin(db.query(count), origin).scalar() or 0
+        total = research_scope(with_origin(db.query(count), origin)).scalar() or 0
         return {
             "total": total,
             "completion_rate": round(done / total, 4) if total else None,
@@ -255,8 +293,8 @@ def panel_quality(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
 
     def tiers() -> Dict[str, int]:
         out: Dict[str, int] = {}
-        for tier, n in with_origin(
-            db.query(ParticipantSession.device_tier, func.count()), origin
+        for tier, n in research_scope(
+            with_origin(db.query(ParticipantSession.device_tier, func.count()), origin)
         ).group_by(ParticipantSession.device_tier):
             out[tier or "unknown"] = n
         return out
@@ -268,9 +306,10 @@ def panel_quality(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
             func.max(TrialEvent.seq_no),
             func.count(TrialEvent.seq_no),
         ).filter(TrialEvent.seq_no.isnot(None))
-        if origin:
-            ids = with_origin(db.query(ParticipantSession.participant_session_id), origin)
-            gap_query = gap_query.filter(TrialEvent.participant_session_id.in_(ids.subquery()))
+        ids = research_scope(
+            with_origin(db.query(ParticipantSession.participant_session_id), origin)
+        )
+        gap_query = gap_query.filter(TrialEvent.participant_session_id.in_(ids.subquery()))
         rows = gap_query.group_by(TrialEvent.participant_session_id).all()
         missing = [(hi - lo + 1) - n for _, lo, hi, n in rows]
         return {
@@ -279,11 +318,16 @@ def panel_quality(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
             "missing_events": sum(m for m in missing if m > 0),
         }
 
+    def indicators_available() -> int:
+        from app.services import data_quality  # deferred: data_quality imports this module
+
+        return int(data_quality.compute(db, None, None, origin)["available"])
+
     return {
         "completion": _safe(db, completion),
         "device_tier_distribution": _safe(db, tiers),
         "missing_events": _safe(db, seq_gaps),
-        "indicators_available": 4,
+        "indicators_available": _safe(db, indicators_available),
         "indicators_planned": 14,
     }
 
@@ -623,7 +667,7 @@ def catalog_search(
         return col.ilike(f"%{q}%")
 
     if kind in (None, "session"):
-        qs = with_origin(db.query(ParticipantSession), origin)
+        qs = not_erased(with_origin(db.query(ParticipantSession), origin))
         if q:
             qs = qs.filter(like(ParticipantSession.participant_session_id))
         if status:
@@ -687,7 +731,15 @@ def catalog_search(
 
 def session_detail(db: Session, session_id: str) -> Optional[Dict[str, Any]]:
     s = db.get(ParticipantSession, session_id)
-    if s is None:
+    if (
+        s is None
+        or not_erased(
+            db.query(ParticipantSession).filter(
+                ParticipantSession.participant_session_id == session_id
+            )
+        ).first()
+        is None
+    ):
         return None
     events: List[Dict[str, Any]] = [{"at": iso(s.created_at), "event": "session_created"}]
     if s.started_at:

@@ -17,6 +17,14 @@ from app.routes import ops
 from app.services import job_tracker, ops_alerts
 
 
+@pytest.fixture(autouse=True)
+def _platform(request: Any) -> Generator[None, None, None]:
+    """Default: platform health reads nothing (unknown). Tests may override via ``PLATFORM``."""
+    snap = getattr(request.module, "PLATFORM", {})
+    with patch("app.services.platform_health.snapshot", lambda force=False: snap):
+        yield
+
+
 @pytest.fixture
 def db() -> Generator[Any, None, None]:
     engine = create_engine(
@@ -179,8 +187,8 @@ def test_alerts_api_list_and_ack(db: Any, sent: Any) -> None:
     app = create_app(test_mode=True)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(user_id="op1")
-    for dep in ops.router.dependencies:
-        app.dependency_overrides[dep.dependency] = lambda: None
+    for guard in ops.GUARDS:
+        app.dependency_overrides[guard] = lambda: None
     with TestClient(app, raise_server_exceptions=False) as c:
         rows = c.get("/v1/ops/alerts").json()["data"]
         assert rows[0]["status"] == "open" and rows[0]["notified"] is True

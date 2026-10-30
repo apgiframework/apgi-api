@@ -10,9 +10,9 @@ First release scope: operational health, ingestion and job status, failure inves
 | Home panel 1 Ingestion | `participant_sessions`, `trial_events`, `acquisition_uploads` | counts link to Catalog / Failures |
 | Home panel 2 Jobs | `tasks`, `webhook_deliveries` | queue backend reported as `celery` |
 | Home panel 3 Data origin | `participant_sessions.data_origin` | synthetic / human-observed / unclassified (NULL, never inferred); links to filtered Catalog; origin filter also scopes panels 1 and 4 |
-| Home panel 4 Scientific quality | sessions, trial events | 4 of 14 indicators measurable: completion, interruption, missing events (sequence gaps), device-tier distribution |
+| Home panel 4 Scientific quality | sessions, trial events | headline indicators; full list on the Data quality screen (`GET /v1/ops/data-quality`) |
 | Home panel 5 Retention/deletion | none | unknown until the deletion ledger (S3-GOV-04) exists |
-| Home panel 6 Platform health | none | unknown until Cloud Monitoring / Cloud SQL Admin are connected (S2-OPS-02) |
+| Home panel 6 Platform health | local probes; Cloud Monitoring; Cloud SQL Admin | see *Platform health* below; unconfigured or unreadable sources stay unknown |
 | Catalog | sessions, chunk uploads, jobs | search, filters, session timeline |
 | Failures | failed/stuck tasks, quarantined/rejected chunks, unverified chunks, unscored sessions, failed webhooks | grouped, owner role, age, retry |
 
@@ -94,6 +94,94 @@ source. Recommended: record D6 as "Celery now, behind a thin enqueue interface" 
 - Tests (`tests/unit/test_ops_alerts.py`) inject faults and check routing, dedup, acknowledgment, recovery
   and retry. Not done: staging fault injection with real email delivery, overdue-purge alerts (no ledger),
   and severity-based escalation.
+
+## Platform health (batch 5)
+
+`GET /v1/ops/platform` (and Home panel 6). Cached for `PLATFORM_HEALTH_TTL_S` (60 s); every source has a hard 4 s limit
+so a hung broker or API cannot stall the console; failures are listed by source and exception type only.
+
+| Reading | Source | Needs |
+|---|---|---|
+| Request success (non-5xx), 5xx ratio, request count, last hour | Cloud Monitoring `run.googleapis.com/request_count` | `GCP_PROJECT_ID`, `CLOUD_RUN_SERVICE`, role `roles/monitoring.viewer` |
+| p95 latency (worst instance) | `request_latencies`, `ALIGN_PERCENTILE_95` then `REDUCE_MAX` | same |
+| Last successful backup | Cloud SQL Admin `backupRuns` | `GCP_PROJECT_ID`, `CLOUD_SQL_INSTANCE`, role `roles/cloudsql.viewer` |
+| Database round-trip, Celery workers online | in-process probes | none |
+
+Notes: "request success" is a request-based ratio, **not** uptime-check availability; no traffic gives unknown, not 100%;
+worst-instance p95 is conservative, not a fleet-wide percentile. Restore-drill date stays unknown until the recovery record exists.
+New alert rules: 5xx ratio >= `ALERT_5XX_RATIO` (5%, min 20 requests) and last backup older than `ALERT_BACKUP_MAX_AGE_HOURS` (36).
+**Not verified against a live GCP project**: the REST calls are covered by unit tests with fake responses only; check
+the filters and IAM in staging. Cloud Tasks queue age is not applicable while the queue is Celery.
+
+## Scientific data quality (batch 6)
+
+`GET /v1/ops/data-quality?study_id&battery_id&origin` and the **Data quality** screen return the master plan's fourteen
+indicators (Monitoring chapter, "Scientific quality dashboard"), each `measured`, `partial` or `unmeasured` with the reason.
+Aggregates only: no participant or session identifiers (tested). 12 of 14 have a data source today.
+
+| # | Indicator | Status | Gap |
+|---|---|---|---|
+| 1 | Sessions by protocol (battery + version) | measured | |
+| 2 | Complete vs interrupted | measured | |
+| 3 | Missing trial events / sequence gaps | measured | |
+| 4 | Signal chunk gaps | partial | acquisition sessions are not linked to participant sessions, so filters do not apply |
+| 5 | Device / browser / tier | partial | tier and client-reported browser family; device model not stored |
+| 6 | Administration mode and app version | measured | client-reported at session creation; sessions created before the migration, or by clients that do not send it, show "not reported" |
+| 7 | Clock synchronisation | measured | from per-session timing-error summaries |
+| 8 | Validity-screen exclusion rates | measured | unscreened sessions reported separately |
+| 9 | Analysis completion | measured | includes durable scoring-job states |
+| 10 | Protocol / battery / gate versions | partial | gate versions not recorded |
+| 11 | Confirmatory / holdout separation | partial | per-participant partition is stored and set once; no assignment policy is automated |
+| 12 | Prediction and K-gate classifications | **unmeasured** | needs S4-ANL-05 validation results |
+| 13 | Reproduction success | **unmeasured** | needs dataset versions (S4-ANL-03) |
+| 14 | Retention per wave | measured | counts completed `session_index`; wave schedule not stored |
+
+Not done: dataset-version scoping (the plan scopes by dataset version; this scopes by study, protocol and origin),
+small-cell suppression for tiny strata, and the Track A/B filter.
+
+## Session metadata and partitions (batch 7)
+
+- Migration `add_session_metadata`: `participant_sessions.administration_mode` (`web` | `native_macos`), `app_version`,
+  `browser_family`; `study_enrollments.partition` (`development` | `confirmation` | `holdout`).
+- `POST /v1/participant-sessions` accepts the three session fields (validated: fixed mode list, restricted character
+  sets). **Clients must send them**: the web app and Explorer need a small change; until then indicator 6 reports "not reported".
+- `POST /v1/ops/enrollments/{id}:partition` (admin, audited) assigns a partition **once**; a second call is 409. This is
+  deliberate: re-assigning after data exist could move holdout participants into development analyses.
+- Not decided here (a scientific call, not an engineering one): *who* is assigned to which partition and in what ratio.
+  The plan's 70/30 holdout and by-participant stratification are not automated; no assignment is made automatically.
+
+## Governance (batch 8, S3-GOV-01/02/03 slice)
+
+**Release dependency.** The plan says no production console route opens on human data until isolation, purpose-specific
+authorization, sensitive-access auditing, exposure gates and withdrawal handling pass their tests. This batch covers
+the parts below; the **gaps listed after it must be closed first**.
+
+*Scopes.* New permissions `ops:read`, `ops:write`, `ops:quality`, held by the admin role only. Every `/v1/ops` route needs
+`ops:read`; state changes (retry, acknowledge, classify origin, assign partition) need `ops:write`; study-level scientific
+data (`data-quality`, `studies`) needs `ops:quality`. `system:admin` alone (e.g. an API key) **no longer** opens the console.
+`test_route_scopes_are_pinned` forces any new route to declare its scope.
+
+*Purpose-bound, audited reads.* A session record needs `purpose` (`operations_support` | `research_qa` |
+`security_investigation`); the console asks before opening one. Session reads, catalog searches (filters only, never the
+search text), failure-list reads and data-quality reads write signed audit entries with actor, purpose and scope. The audit
+write is **not** best-effort: if it fails the read returns 500 instead of being served unaudited.
+
+*Withdrawal.* Research-purpose views (data-quality and Home panel 4) exclude (a) erased participants and (b) any session
+that is not synthetic and lacks an active, current-version research-participation consent; unclassified sessions are not
+assumed synthetic. The number withheld is shown. Origin is never changed by consent state. Operational views keep working
+after research is declined or withdrawn (product processing continues); erased participants disappear from every view.
+
+*Access-denial suite.* `researcher`, `viewer`, unknown role, no roles and unauthenticated requests are refused on
+every `/v1/ops` route; a read-only key cannot write or see quality data.
+
+**Not done (still blocking human-data release):**
+- The plan's eight roles. Only admin/researcher/viewer exist; researchers get **no** console scope on purpose, because
+  there is no study-ownership model, so granting `ops:quality` would let one researcher read every study.
+- Study-level row security (S2-CAT-01 RLS) and cross-study isolation tests; today access is all-or-nothing admin.
+- Exposure gates (`ExposureGate.emit()`) on console responses; responses are aggregates plus session IDs, but no gate runs.
+- Withdrawal during in-flight work (workers re-checking consent before upload, scoring, export): the job code is unchanged.
+- Aggregate-only operator endpoints (no session IDs) for a lesser operator role; small-cell suppression.
+- Purpose is declared by the user, not authorised against a grant; it is recorded, not enforced.
 
 ## Use
 
