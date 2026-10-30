@@ -164,6 +164,9 @@ async def create_participant_session(
         ),
         email_hash=email_hash_for(participant),
         data_origin=request.data_origin,
+        administration_mode=request.administration_mode,
+        app_version=request.app_version,
+        browser_family=request.browser_family,
         correlation_id=getattr(http_request.state, "correlation_id", None),
     )
     db.add(session)

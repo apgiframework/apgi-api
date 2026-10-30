@@ -161,6 +161,15 @@ class ParticipantSessionCreateRequest(BaseModel):
     data_origin: Optional[Literal["synthetic", "human_observed"]] = Field(
         None, description="Factual origin of this session's data; omit if unknown"
     )
+    administration_mode: Optional[Literal["web", "native_macos"]] = Field(
+        None, description="How the battery was administered; omit if unknown"
+    )
+    app_version: Optional[str] = Field(
+        None, max_length=40, pattern=r"^[A-Za-z0-9._+-]+$", description="Client build version"
+    )
+    browser_family: Optional[str] = Field(
+        None, max_length=40, pattern=r"^[A-Za-z0-9 ._-]+$", description="Browser family, if web"
+    )
 
 
 class ParticipantSessionResponse(BaseModel):

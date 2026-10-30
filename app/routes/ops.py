@@ -192,3 +192,45 @@ async def ops_studies(db: Session = Depends(get_db)) -> Dict[str, Any]:
         for b in db.query(Battery).order_by(Battery.name)
     ]
     return _envelope({"studies": studies, "batteries": batteries})
+
+
+class PartitionRequest(BaseModel):
+    partition: Literal["development", "confirmation", "holdout"]
+
+
+@router.post(
+    "/enrollments/{enrollment_id}:partition",
+    summary="Assign an enrollment to an analysis partition (set once)",
+    responses={
+        404: {"description": "Unknown enrollment"},
+        409: {"description": "Already assigned"},
+    },
+)
+async def ops_assign_partition(
+    enrollment_id: str,
+    body: PartitionRequest,
+    db: Session = Depends(get_db),
+    current_user: TokenPayload = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from app.database.models import StudyEnrollment
+
+    enrollment = db.get(StudyEnrollment, enrollment_id)
+    if enrollment is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Enrollment not found")
+    if enrollment.partition is not None:
+        # Re-assigning after data exist would let holdout participants leak into
+        # development analyses, so an assignment is final.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Partition is already assigned and cannot change"
+        )
+    enrollment.partition = body.partition
+    db.commit()
+    log_audit_event(
+        db=db,
+        user_id=current_user.user_id,
+        action="study_enrollment:assign_partition",
+        resource_type="study_enrollment",
+        resource_id=enrollment_id,
+        details={"partition": body.partition},
+    )
+    return _envelope({"enrollment_id": enrollment_id, "partition": body.partition})

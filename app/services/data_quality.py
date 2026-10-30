@@ -28,6 +28,7 @@ from app.database.models import (
     OpsJob,
     ParticipantSession,
     ParticipantSessionStatus,
+    StudyEnrollment,
     TrialEvent,
 )
 from app.services import job_tracker
@@ -206,8 +207,13 @@ def compute(
             "Device, browser and tier distribution",
             "Measurement comparability",
             "partial",
-            dict(dist),
-            "Tier only; browser and device model are not stored.",
+            {
+                "tier": dict(dist),
+                "browser_family": dict(
+                    Counter(x.browser_family or "not reported" for x in sessions)
+                ),
+            },
+            "Device model is not stored; browser is client-reported.",
         )
 
     safe(
@@ -218,14 +224,31 @@ def compute(
         tiers,
     )
 
-    out.append(
-        _unmeasured(
+    # 6 administration mode / app version
+    def admin_mode() -> Dict[str, Any]:
+        v = {
+            "administration_mode": dict(
+                Counter(x.administration_mode or "not reported" for x in sessions)
+            ),
+            "app_version": dict(Counter(x.app_version or "not reported" for x in sessions)),
+            "sessions_not_reporting_mode": sum(1 for x in sessions if not x.administration_mode),
+        }
+        return _indicator(
             6,
             "admin_mode_version",
             "Administration mode and app-version distribution",
             "Mode effects; instrument-version consistency",
-            "No administration-mode or client app-version field is stored on sessions.",
+            "measured",
+            v,
+            "Values are client-reported at session creation; older sessions report nothing.",
         )
+
+    safe(
+        6,
+        "admin_mode_version",
+        "Administration mode and app-version distribution",
+        "Mode effects; instrument-version consistency",
+        admin_mode,
     )
 
     # 7 clock sync
@@ -329,14 +352,48 @@ def compute(
         versions,
     )
 
-    out.append(
-        _unmeasured(
+    # 11 partitions (assigned per participant at enrolment; immutable once set)
+    def partitions() -> Dict[str, Any]:
+        pids = {x.participant_id for x in sessions}
+        enr = (
+            db.query(StudyEnrollment).filter(StudyEnrollment.participant_id.in_(pids))
+            if pids
+            else None
+        )
+        if enr is not None and study_id:
+            enr = enr.filter(StudyEnrollment.study_id == study_id)
+        rows = enr.all() if enr is not None else []
+        part_of = {(e.participant_id, e.study_id): e.partition for e in rows}
+        # A participant with no enrollment row has no partition either.
+        participants = Counter(
+            part_of.get((pid, sid)) or "unassigned"
+            for pid, sid in {(x.participant_id, x.study_id) for x in sessions}
+        )
+        by_session = Counter(
+            part_of.get((x.participant_id, x.study_id)) or "unassigned" for x in sessions
+        )
+        v = {
+            "participants": dict(participants),
+            "sessions": dict(by_session),
+            "unassigned_participants": participants.get("unassigned", 0),
+        }
+        return _indicator(
             11,
             "holdout_separation",
             "Confirmatory/exploratory and holdout separation",
             "Inferential integrity",
-            "Partition assignment (development / confirmation / holdout) is not stored.",
+            "partial",
+            v,
+            "Storage and a set-once assignment endpoint exist; no assignment policy is automated, "
+            "so partitions are only as complete as researchers make them.",
         )
+
+    safe(
+        11,
+        "holdout_separation",
+        "Confirmatory/exploratory and holdout separation",
+        "Inferential integrity",
+        partitions,
     )
     out.append(
         _unmeasured(

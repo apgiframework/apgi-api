@@ -17,6 +17,8 @@ the apgiframework/apgi-framework release they ship alongside.
   (`GET /v1/ops/platform`), plus 5xx-ratio and stale-backup alert rules.
 - Data-quality screen and `GET /v1/ops/data-quality`: the fourteen scientific indicators with explicit
   measured / partial / unmeasured status and study, protocol and origin filters.
+- Session metadata (administration mode, app version, browser family) and set-once enrollment partitions
+  (migration `add_session_metadata`); data-quality indicators 6 and 11 now report.
 - Server-side effort/fraud/validity screening (`app/services/screening.py`):
   fast responses, invariant responding, straight-lining/zig-zagging, failed
   attention checks, form-layer bot signals, and duplicate device-fingerprint /

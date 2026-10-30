@@ -270,6 +270,7 @@ def _quality_world(db: Any) -> Any:
         ParticipantSession,
         ParticipantSessionStatus,
         Study,
+        StudyEnrollment,
         TrialEvent,
     )
 
@@ -301,18 +302,31 @@ def _quality_world(db: Any) -> Any:
         C.COMPLETED,
         device_tier="A",
         data_origin="synthetic",
+        administration_mode="web",
+        app_version="1.2.0",
+        browser_family="Firefox",
         norm_eligible=True,
         screening={"flags": [], "exclusion_reasons": []},
         timing_error_distribution={"n": 10, "p95": 4.0},
         scores={"x": 1},
     )
-    add(people[0], 2, C.COMPLETED, device_tier="A", data_origin="synthetic")
+    add(
+        people[0],
+        2,
+        C.COMPLETED,
+        device_tier="A",
+        data_origin="synthetic",
+        administration_mode="web",
+        app_version="1.2.0",
+    )
     add(
         people[1],
         1,
         C.COMPLETED,
         device_tier="C",
         data_origin="synthetic",
+        administration_mode="native_macos",
+        app_version="2.0.0",
         norm_eligible=False,
         screening={"flags": [], "exclusion_reasons": ["device_tier_c"]},
         timing_error_distribution={"n": 10, "p95": 30.0},
@@ -327,6 +341,12 @@ def _quality_world(db: Any) -> Any:
                 seq_no=seq,
             )
         )
+    db.add(
+        StudyEnrollment(
+            participant_id=people[0].participant_id, study_id=study.study_id, partition="holdout"
+        )
+    )
+    db.add(StudyEnrollment(participant_id=people[1].participant_id, study_id=study.study_id))
     db.commit()
     return study, battery
 
@@ -341,8 +361,6 @@ def test_fourteen_indicators_with_honest_status(client: TestClient, test_db_sess
     ind = _by_key(res)
     assert len(res["data"]["indicators"]) == 14 and res["data"]["planned"] == 14
     for key in (
-        "admin_mode_version",
-        "holdout_separation",
         "kgate_classifications",
         "reproduction",
     ):
@@ -359,7 +377,21 @@ def test_fourteen_indicators_with_honest_status(client: TestClient, test_db_sess
     assert ind["retention"]["value"]["participants_completing_wave_1"] == 2
     assert ind["retention"]["value"]["waves"]["wave_2"]["participants"] == 1
     assert ind["device_tier"]["status"] == "partial"
-    assert res["data"]["available"] == 10
+    assert ind["device_tier"]["value"]["tier"] == {"A": 2, "C": 1, "unknown": 1}
+    assert ind["device_tier"]["value"]["browser_family"] == {"Firefox": 1, "not reported": 3}
+    assert ind["admin_mode_version"]["status"] == "measured"
+    assert ind["admin_mode_version"]["value"]["administration_mode"] == {
+        "web": 2,
+        "native_macos": 1,
+        "not reported": 1,
+    }
+    assert ind["admin_mode_version"]["value"]["app_version"]["1.2.0"] == 2
+    hold = ind["holdout_separation"]["value"]
+    assert hold["participants"] == {"holdout": 1, "unassigned": 2} and hold["sessions"] == {
+        "holdout": 2,
+        "unassigned": 2,
+    }
+    assert res["data"]["available"] == 12
 
 
 def test_data_quality_filters_by_origin_and_has_no_identifiers(
@@ -391,3 +423,57 @@ def test_empty_database_quality_is_unknown_not_zero(client: TestClient) -> None:
     res = client.get("/v1/ops/data-quality").json()["data"]
     comp = next(i for i in res["indicators"] if i["key"] == "completion")
     assert comp["value"]["completion_rate"] is None and res["session_count"] == 0
+
+
+def test_partition_assignment_is_set_once_and_audited(
+    client: TestClient, test_db_session: Any
+) -> None:
+    from types import SimpleNamespace
+
+    from app.database.models import StudyEnrollment
+    from app.services.authorization import get_current_user
+
+    client.app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(user_id="admin-1")  # type: ignore[attr-defined]
+    study, _ = _quality_world(test_db_session)
+    enr = test_db_session.query(StudyEnrollment).filter(StudyEnrollment.partition.is_(None)).first()
+    with patch("app.routes.ops.log_audit_event") as audit:
+        ok = client.post(
+            f"/v1/ops/enrollments/{enr.enrollment_id}:partition", json={"partition": "development"}
+        )
+        again = client.post(
+            f"/v1/ops/enrollments/{enr.enrollment_id}:partition", json={"partition": "holdout"}
+        )
+    assert ok.status_code == 200 and again.status_code == 409
+    audit.assert_called_once()
+    test_db_session.refresh(enr)
+    assert enr.partition == "development"
+    assert (
+        client.post("/v1/ops/enrollments/nope:partition", json={"partition": "holdout"}).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            f"/v1/ops/enrollments/{enr.enrollment_id}:partition", json={"partition": "test"}
+        ).status_code
+        == 422
+    )
+
+
+def test_session_create_schema_validates_client_metadata() -> None:
+    import pytest as _pytest
+    from pydantic import ValidationError
+
+    from app.schemas.research import ParticipantSessionCreateRequest as R
+
+    base = dict(participant_id="p", study_id="s", battery_id="b")
+    ok = R(
+        **base, administration_mode="native_macos", app_version="2.0.0+7", browser_family="Safari"
+    )
+    assert ok.administration_mode == "native_macos"
+    for bad in (
+        dict(administration_mode="tablet"),
+        dict(app_version="1.0; drop"),
+        dict(browser_family="<script>"),
+    ):
+        with _pytest.raises(ValidationError):
+            R(**base, **bad)

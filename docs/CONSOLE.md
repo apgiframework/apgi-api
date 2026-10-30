@@ -117,7 +117,7 @@ the filters and IAM in staging. Cloud Tasks queue age is not applicable while th
 
 `GET /v1/ops/data-quality?study_id&battery_id&origin` and the **Data quality** screen return the master plan's fourteen
 indicators (Monitoring chapter, "Scientific quality dashboard"), each `measured`, `partial` or `unmeasured` with the reason.
-Aggregates only: no participant or session identifiers (tested). 10 of 14 have a data source today.
+Aggregates only: no participant or session identifiers (tested). 12 of 14 have a data source today.
 
 | # | Indicator | Status | Gap |
 |---|---|---|---|
@@ -125,19 +125,30 @@ Aggregates only: no participant or session identifiers (tested). 10 of 14 have a
 | 2 | Complete vs interrupted | measured | |
 | 3 | Missing trial events / sequence gaps | measured | |
 | 4 | Signal chunk gaps | partial | acquisition sessions are not linked to participant sessions, so filters do not apply |
-| 5 | Device / browser / tier | partial | tier only |
-| 6 | Administration mode and app version | **unmeasured** | no field stored |
+| 5 | Device / browser / tier | partial | tier and client-reported browser family; device model not stored |
+| 6 | Administration mode and app version | measured | client-reported at session creation; sessions created before the migration, or by clients that do not send it, show "not reported" |
 | 7 | Clock synchronisation | measured | from per-session timing-error summaries |
 | 8 | Validity-screen exclusion rates | measured | unscreened sessions reported separately |
 | 9 | Analysis completion | measured | includes durable scoring-job states |
 | 10 | Protocol / battery / gate versions | partial | gate versions not recorded |
-| 11 | Confirmatory / holdout separation | **unmeasured** | partition assignment not stored |
+| 11 | Confirmatory / holdout separation | partial | per-participant partition is stored and set once; no assignment policy is automated |
 | 12 | Prediction and K-gate classifications | **unmeasured** | needs S4-ANL-05 validation results |
 | 13 | Reproduction success | **unmeasured** | needs dataset versions (S4-ANL-03) |
 | 14 | Retention per wave | measured | counts completed `session_index`; wave schedule not stored |
 
 Not done: dataset-version scoping (the plan scopes by dataset version; this scopes by study, protocol and origin),
 small-cell suppression for tiny strata, and the Track A/B filter.
+
+## Session metadata and partitions (batch 7)
+
+- Migration `add_session_metadata`: `participant_sessions.administration_mode` (`web` | `native_macos`), `app_version`,
+  `browser_family`; `study_enrollments.partition` (`development` | `confirmation` | `holdout`).
+- `POST /v1/participant-sessions` accepts the three session fields (validated: fixed mode list, restricted character
+  sets). **Clients must send them**: the web app and Explorer need a small change; until then indicator 6 reports "not reported".
+- `POST /v1/ops/enrollments/{id}:partition` (admin, audited) assigns a partition **once**; a second call is 409. This is
+  deliberate: re-assigning after data exist could move holdout participants into development analyses.
+- Not decided here (a scientific call, not an engineering one): *who* is assigned to which partition and in what ratio.
+  The plan's 70/30 holdout and by-participant stratification are not automated; no assignment is made automatically.
 
 ## Use
 
