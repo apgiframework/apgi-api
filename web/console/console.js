@@ -151,6 +151,8 @@
           kv("Running", linkVal(isNull(jobs.tasks_by_status) ? null : t.running, "#/catalog?kind=task&status=running")),
           kv("Failed", linkVal(isNull(jobs.tasks_by_status) ? null : t.failed, "#/failures")),
           kv("Oldest pending", val(jobs.oldest_pending_age_seconds === null && t.pending === 0 ? 0 : jobs.oldest_pending_age_seconds, dur)),
+          kv("Durable jobs lost or stale", linkVal(isNull(jobs.durable_jobs) ? null : jobs.durable_jobs.lease_expired + jobs.durable_jobs.stale_queued, "#/failures")),
+          kv("Dead-lettered (retries exhausted)", linkVal(isNull(jobs.durable_jobs) ? null : jobs.durable_jobs.dead, "#/failures")),
           kv("Stuck running", linkVal(jobs.stuck_running, "#/failures")),
           kv("Webhook deliveries failed", linkVal(jobs.webhook_failed, "#/failures"))
         ]),

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.database.models import (
     AcquisitionUpload,
+    OpsJob,
     ParticipantSession,
     ParticipantSessionStatus,
     Task,
@@ -26,6 +27,7 @@ from app.database.models import (
     TrialEvent,
     WebhookDelivery,
 )
+from app.services import job_tracker
 
 # A running task with no completion after this long is treated as stuck.
 STUCK_TASK_AFTER = timedelta(minutes=30)
@@ -194,7 +196,15 @@ def panel_jobs(db: Session) -> Dict[str, Any]:
             or 0
         )
 
+    def durable() -> Dict[str, int]:
+        counts = {k: 0 for k in ("queued", "running", "succeeded", "failed", "dead")}
+        counts.update({"stale_queued": 0, "lease_expired": 0})
+        for job in db.query(OpsJob):
+            counts[job_tracker.classify(job, now)] += 1
+        return counts
+
     return {
+        "durable_jobs": _safe(db, durable),
         "queue_backend": "celery",
         "tasks_by_status": _safe(db, by_status),
         "oldest_pending_age_seconds": _safe(db, oldest_pending),
@@ -355,6 +365,14 @@ class Failure:
         }
 
 
+JOB_GROUPS = (
+    ("dead", "Dead-lettered jobs (retries exhausted)", "engineering"),
+    ("failed", "Failed jobs", "engineering"),
+    ("lease_expired", "Worker lost (lease expired)", "engineering"),
+    ("stale_queued", "Queued but never started", "engineering"),
+)
+
+
 def collect_failures(db: Session, limit: int = 200) -> List[Dict[str, Any]]:
     now = utcnow()
     out: List[Failure] = []
@@ -413,11 +431,35 @@ def collect_failures(db: Session, limit: int = 200) -> List[Dict[str, Any]]:
             )
         )
 
+    tracked = {(j.kind, j.ref) for j in db.query(OpsJob.kind, OpsJob.ref)}
+
+    for state_name, label, owner in JOB_GROUPS:
+        for j in db.query(OpsJob).filter(
+            OpsJob.status.in_(("queued", "running", "failed", "dead"))
+        ):
+            if job_tracker.classify(j, now) != state_name:
+                continue
+            out.append(
+                Failure(
+                    f"job:{j.job_id}",
+                    "job",
+                    f"{j.kind}:{j.ref}",
+                    label,
+                    owner,
+                    j.error or label,
+                    j.finished_at or j.started_at or j.enqueued_at,
+                    True,
+                    j.correlation_id,
+                )
+            )
+
     for u in db.query(AcquisitionUpload).filter(
         AcquisitionUpload.status == "pending",
         AcquisitionUpload.committed.is_(True),
         AcquisitionUpload.updated_at < now - STUCK_UPLOAD_AFTER,
     ):
+        if (job_tracker.UPLOAD_VERIFY, u.upload_id) in tracked:
+            continue
         out.append(
             Failure(
                 f"upload:{u.upload_id}",
@@ -436,6 +478,8 @@ def collect_failures(db: Session, limit: int = 200) -> List[Dict[str, Any]]:
         ParticipantSession.scores.is_(None),
         ParticipantSession.completed_at < now - STUCK_UPLOAD_AFTER,
     ):
+        if (job_tracker.SCORING, s.participant_session_id) in tracked:
+            continue
         out.append(
             Failure(
                 f"scoring:{s.participant_session_id}",
@@ -482,12 +526,40 @@ class RetryNotEligible(Exception):
     pass
 
 
+def _dispatch(db: Session, kind: str, ref: str) -> None:
+    """Record the durable job, then hand it to the queue (idempotent by kind/ref)."""
+    if kind == job_tracker.UPLOAD_VERIFY:
+        from app.tasks.acquisition_tasks import verify_acquisition_upload
+
+        job_tracker.record_enqueue(db, kind, ref)
+        verify_acquisition_upload.delay(ref)
+    elif kind == job_tracker.SCORING:
+        from app.tasks.scoring_tasks import score_participant_session
+
+        job_tracker.record_enqueue(db, kind, ref)
+        score_participant_session.delay(ref)
+    else:
+        raise RetryNotEligible("this job kind has no safe retry")
+
+
 def retry_job(db: Session, job_id: str) -> Dict[str, Any]:
-    """Re-enqueue an eligible job. Both targets are idempotent by ID."""
+    """Re-enqueue an eligible job. All targets are idempotent by ID."""
     kind, _, ref = job_id.partition(":")
     now = utcnow()
 
-    if kind == "upload":
+    if kind == "job":
+        job = db.get(OpsJob, ref)
+        if job is None:
+            raise LookupError(job_id)
+        if job_tracker.classify(job, now) not in (
+            "failed",
+            "dead",
+            "lease_expired",
+            "stale_queued",
+        ):
+            raise RetryNotEligible("job is not failed, lost or stale")
+        _dispatch(db, str(job.kind), str(job.ref))
+    elif kind == "upload":
         rec = db.get(AcquisitionUpload, ref)
         if rec is None:
             raise LookupError(job_id)
@@ -495,18 +567,14 @@ def retry_job(db: Session, job_id: str) -> Dict[str, Any]:
             raise RetryNotEligible(
                 "only committed uploads still pending verification can be retried"
             )
-        from app.tasks.acquisition_tasks import verify_acquisition_upload
-
-        verify_acquisition_upload.delay(ref)
+        _dispatch(db, job_tracker.UPLOAD_VERIFY, ref)
     elif kind == "scoring":
         ps = db.get(ParticipantSession, ref)
         if ps is None:
             raise LookupError(job_id)
         if ps.status != ParticipantSessionStatus.COMPLETED or ps.scores is not None:
             raise RetryNotEligible("only completed, unscored sessions can be re-scored")
-        from app.tasks.scoring_tasks import score_participant_session
-
-        score_participant_session.delay(ref)
+        _dispatch(db, job_tracker.SCORING, ref)
     else:
         raise RetryNotEligible("this job kind has no safe retry")
 

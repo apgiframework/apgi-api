@@ -43,8 +43,13 @@ def get_verification_enqueuer() -> Callable[[str], None]:
     """Dependency returning the function that queues the SHA-256 verification job."""
 
     def enqueue(upload_id: str) -> None:
+        from app.database.connection import SessionLocal
+        from app.services import job_tracker
         from app.tasks.acquisition_tasks import verify_acquisition_upload
 
+        # Durable record first: a crash before dispatch leaves a visible queued job.
+        with SessionLocal() as db:
+            job_tracker.record_enqueue(db, job_tracker.UPLOAD_VERIFY, upload_id)
         verify_acquisition_upload.delay(upload_id)
 
     return enqueue

@@ -9,6 +9,8 @@ the apgiframework/apgi-framework release they ship alongside.
   failures with retry, per-source freshness). Unmeasurable values are `null`/unknown. See `docs/CONSOLE.md`.
 - `participant_sessions.data_origin` / `correlation_id` (migration `add_session_data_origin`),
   `POST /v1/ops/sessions/{id}:classify`, and `X-APGI-Correlation-Id` middleware.
+- Durable `ops_jobs` records for upload verification and scoring with a lease watchdog
+  (`ops.sweep_jobs`); Celery now registers the scoring and erasure tasks.
 - Server-side effort/fraud/validity screening (`app/services/screening.py`):
   fast responses, invariant responding, straight-lining/zig-zagging, failed
   attention checks, form-layer bot signals, and duplicate device-fingerprint /

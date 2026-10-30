@@ -59,6 +59,25 @@ source. Recommended: record D6 as "Celery now, behind a thin enqueue interface" 
   UUIDv4 is minted), puts it in JSON logs and echoes it on the response. Search Cloud Logging for
   `jsonPayload.correlation_id`. Clients (web, Explorer, upload agent) still need to send the header.
 
+## Durable jobs and correlation on uploads (batch 3)
+
+- Migration `add_ops_jobs`: table `ops_jobs` and `acquisition_uploads.correlation_id`.
+- `app/services/job_tracker.py`: a job row is written **before** dispatch (upload verification, scoring),
+  so a crash before the queue call leaves a visible `queued` row. Workers mark start (30-minute lease)
+  and finish; tracking is best-effort and never breaks the work. The worker restores the job's
+  correlation ID into its log context.
+- Watchdog `ops.sweep_jobs` (Celery beat, every 60 s) persists expired leases as `failed`, or `dead`
+  once `max_attempts` (3) is spent. The console also derives `lease_expired` and `stale_queued`
+  (queued > 15 min) at read time, so failures stay visible even if the sweep is not running.
+- Failures groups: dead-lettered, failed, worker lost, queued-never-started; all retryable
+  (`job:{id}`), carry the correlation ID, and an operator retry restores the attempt budget.
+  Pre-tracking heuristics (unverified chunk, unscored session) still apply to rows with no job record.
+- Not yet covered: task creation idempotency at the broker (Cloud Tasks / Celery acks), the outbox
+  pattern (record and dispatch are two commits, not one), crash-injection tests (S2-CAT-05 done-when),
+  and job kinds beyond upload verification and scoring (erasure, webhooks).
+- Fix included: `scoring_tasks` and `deletion_tasks` were missing from Celery's `include` list, so a
+  worker would not have registered `score_participant_session` or `erase_participant_data`.
+
 ## Use
 
 Sign in at `/console` with an admin account. Tests: `pytest tests/unit/test_ops_console.py`.

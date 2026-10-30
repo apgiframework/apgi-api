@@ -41,6 +41,9 @@ celery_app = Celery(
         "app.tasks.experimental_tasks",
         "app.tasks.webhook_tasks",
         "app.tasks.acquisition_tasks",
+        "app.tasks.ops_tasks",
+        "app.tasks.scoring_tasks",
+        "app.tasks.deletion_tasks",
     ],
 )
 
@@ -70,6 +73,10 @@ celery_app.conf.beat_schedule = {
     "retry-failed-webhooks": {
         "task": "process_pending_webhooks",
         "schedule": 60.0,  # Run every minute
+    },
+    "ops-sweep-jobs": {
+        "task": "ops.sweep_jobs",
+        "schedule": 60.0,
     },
 }
 

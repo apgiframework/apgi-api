@@ -340,8 +340,10 @@ async def complete_participant_session(
         # best-effort — a scoring failure must never fail session completion
         # for the client, which has already finished the battery.
         try:
+            from app.services import job_tracker
             from app.tasks.scoring_tasks import score_participant_session
 
+            job_tracker.record_enqueue(db, job_tracker.SCORING, participant_session_id)
             score_participant_session.delay(participant_session_id)
         except Exception:
             logger.info(
