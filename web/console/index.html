@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APGI Operations Console</title>
+  <link rel="stylesheet" href="/console/console.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="bar">
+    <strong class="brand">APGI Console</strong>
+    <nav id="nav" aria-label="Console" hidden>
+      <a href="#/home" data-route="home">Home</a>
+      <a href="#/catalog" data-route="catalog">Catalog</a>
+      <a href="#/failures" data-route="failures">Failures</a>
+    </nav>
+    <span class="spacer"></span>
+    <span id="who" class="muted"></span>
+    <button id="signout" class="btn ghost" hidden>Sign out</button>
+  </header>
+  <main id="main" tabindex="-1"></main>
+  <script src="/console/console.js" defer></script>
+</body>
+</html>
