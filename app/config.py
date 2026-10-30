@@ -186,6 +186,13 @@ class Settings:
             os.getenv("ALERT_ERROR_RATE_WINDOW_MINUTES", "1")
         )
         self.alert_cooldown_minutes: int = int(os.getenv("ALERT_COOLDOWN_MINUTES", "5"))
+        # Operational alerts raised by the console watchdog (app/services/ops_alerts.py)
+        self.alert_email_recipients: List[str] = [
+            e.strip() for e in os.getenv("ALERT_EMAIL_RECIPIENTS", "").split(",") if e.strip()
+        ]
+        self.alert_quarantine_threshold: int = int(os.getenv("ALERT_QUARANTINE_THRESHOLD", "5"))
+        self.alert_failed_task_threshold: int = int(os.getenv("ALERT_FAILED_TASK_THRESHOLD", "5"))
+        self.alert_reminder_hours: int = int(os.getenv("ALERT_REMINDER_HOURS", "24"))
 
         # Email Settings for notifications and password reset
         self.smtp_server: Optional[str] = os.getenv("SMTP_SERVER")

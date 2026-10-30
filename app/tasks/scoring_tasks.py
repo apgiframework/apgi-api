@@ -16,6 +16,7 @@ from celery import shared_task
 from app.database.connection import SessionLocal
 from app.services.authorization import log_audit_event
 from app.services.bigquery_export import export_session
+from app.services.job_tracker import SCORING, track
 from app.services.scoring import score_session
 
 logger = logging.getLogger(__name__)
@@ -54,4 +55,5 @@ def _score_and_export(participant_session_id: str) -> None:
 
 @shared_task(name="score_participant_session")  # type: ignore[untyped-decorator]
 def score_participant_session(participant_session_id: str) -> None:
-    _score_and_export(participant_session_id)
+    with track(SCORING, participant_session_id):
+        _score_and_export(participant_session_id)

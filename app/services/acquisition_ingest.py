@@ -17,6 +17,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.database.models import AcquisitionUpload
+from app.middleware.correlation import get_correlation_id
 from app.services.acquisition_storage import AcquisitionObjectStore
 
 PENDING, ACCEPTED, QUARANTINED, REJECTED = "pending", "accepted", "quarantined", "rejected"
@@ -160,6 +161,7 @@ def init_upload(
         status=PENDING,
         reason="",
         committed=False,
+        correlation_id=get_correlation_id(),
     )
     db.add(rec)
     db.commit()

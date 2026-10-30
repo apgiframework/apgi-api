@@ -12,7 +12,7 @@ control called for in the governing doc's Phase 2 checklist.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -157,6 +157,9 @@ class ParticipantSessionCreateRequest(BaseModel):
         None,
         max_length=512,
         description="Client device fingerprint; stored only as a peppered hash",
+    )
+    data_origin: Optional[Literal["synthetic", "human_observed"]] = Field(
+        None, description="Factual origin of this session's data; omit if unknown"
     )
 
 

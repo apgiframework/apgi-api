@@ -19,6 +19,8 @@ from sqlalchemy.orm import Session
 
 from app.database.models import (
     AcquisitionUpload,
+    OpsAlert,
+    OpsJob,
     ParticipantSession,
     ParticipantSessionStatus,
     Task,
@@ -26,6 +28,7 @@ from app.database.models import (
     TrialEvent,
     WebhookDelivery,
 )
+from app.services import job_tracker
 
 # A running task with no completion after this long is treated as stuck.
 STUCK_TASK_AFTER = timedelta(minutes=30)
@@ -59,6 +62,16 @@ def iso(ts: Any) -> Optional[str]:
     return ts.isoformat() if ts else None
 
 
+def dur_text(seconds: Optional[int]) -> str:
+    if seconds is None:
+        return "unknown"
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    if seconds < 86400:
+        return f"{seconds // 3600}h"
+    return f"{seconds // 86400}d"
+
+
 def age_seconds(ts: Any, now: Optional[datetime] = None) -> Optional[int]:
     ts = aware(ts)
     if ts is None:
@@ -75,6 +88,18 @@ def _safe(db: Session, fn: Callable[[], Any]) -> Any:
         # the remaining panels can still be measured.
         db.rollback()
         return None
+
+
+ORIGINS = ("synthetic", "human_observed", "unclassified")
+
+
+def with_origin(query: Any, origin: Optional[str]) -> Any:
+    """Restrict a ParticipantSession query to one origin class (None = all)."""
+    if origin == "unclassified":
+        return query.filter(ParticipantSession.data_origin.is_(None))
+    if origin in ("synthetic", "human_observed"):
+        return query.filter(ParticipantSession.data_origin == origin)
+    return query
 
 
 def _enum_val(v: Any) -> str:
@@ -121,14 +146,14 @@ def freshness(db: Session) -> List[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def panel_ingestion(db: Session) -> Dict[str, Any]:
+def panel_ingestion(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
     since = utcnow() - timedelta(hours=24)
 
     def sessions() -> Dict[str, int]:
         counts = {s.value: 0 for s in ParticipantSessionStatus}
-        for status, n in db.query(ParticipantSession.status, func.count()).group_by(
-            ParticipantSession.status
-        ):
+        for status, n in with_origin(
+            db.query(ParticipantSession.status, func.count()), origin
+        ).group_by(ParticipantSession.status):
             counts[_enum_val(status)] = n
         return counts
 
@@ -150,7 +175,9 @@ def panel_ingestion(db: Session) -> Dict[str, Any]:
         ),
         "sessions_started_24h": _safe(
             db,
-            lambda: db.query(func.count(ParticipantSession.participant_session_id))
+            lambda: with_origin(
+                db.query(func.count(ParticipantSession.participant_session_id)), origin
+            )
             .filter(ParticipantSession.created_at >= since)
             .scalar(),
         ),
@@ -180,7 +207,15 @@ def panel_jobs(db: Session) -> Dict[str, Any]:
             or 0
         )
 
+    def durable() -> Dict[str, int]:
+        counts = {k: 0 for k in ("queued", "running", "succeeded", "failed", "dead")}
+        counts.update({"stale_queued": 0, "lease_expired": 0})
+        for job in db.query(OpsJob):
+            counts[job_tracker.classify(job, now)] += 1
+        return counts
+
     return {
+        "durable_jobs": _safe(db, durable),
         "queue_backend": "celery",
         "tasks_by_status": _safe(db, by_status),
         "oldest_pending_age_seconds": _safe(db, oldest_pending),
@@ -194,23 +229,24 @@ def panel_jobs(db: Session) -> Dict[str, Any]:
     }
 
 
-def panel_quality(db: Session) -> Dict[str, Any]:
+def panel_quality(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
     """Scientific-quality indicators computable today. Kept apart from operations."""
 
     def completion() -> Dict[str, Any]:
+        count = func.count(ParticipantSession.participant_session_id)
         done = (
-            db.query(func.count(ParticipantSession.participant_session_id))
+            with_origin(db.query(count), origin)
             .filter(ParticipantSession.status == ParticipantSessionStatus.COMPLETED)
             .scalar()
             or 0
         )
         abandoned = (
-            db.query(func.count(ParticipantSession.participant_session_id))
+            with_origin(db.query(count), origin)
             .filter(ParticipantSession.status == ParticipantSessionStatus.ABANDONED)
             .scalar()
             or 0
         )
-        total = db.query(func.count(ParticipantSession.participant_session_id)).scalar() or 0
+        total = with_origin(db.query(count), origin).scalar() or 0
         return {
             "total": total,
             "completion_rate": round(done / total, 4) if total else None,
@@ -219,24 +255,23 @@ def panel_quality(db: Session) -> Dict[str, Any]:
 
     def tiers() -> Dict[str, int]:
         out: Dict[str, int] = {}
-        for tier, n in db.query(ParticipantSession.device_tier, func.count()).group_by(
-            ParticipantSession.device_tier
-        ):
+        for tier, n in with_origin(
+            db.query(ParticipantSession.device_tier, func.count()), origin
+        ).group_by(ParticipantSession.device_tier):
             out[tier or "unknown"] = n
         return out
 
     def seq_gaps() -> Dict[str, int]:
-        rows = (
-            db.query(
-                TrialEvent.participant_session_id,
-                func.min(TrialEvent.seq_no),
-                func.max(TrialEvent.seq_no),
-                func.count(TrialEvent.seq_no),
-            )
-            .filter(TrialEvent.seq_no.isnot(None))
-            .group_by(TrialEvent.participant_session_id)
-            .all()
-        )
+        gap_query = db.query(
+            TrialEvent.participant_session_id,
+            func.min(TrialEvent.seq_no),
+            func.max(TrialEvent.seq_no),
+            func.count(TrialEvent.seq_no),
+        ).filter(TrialEvent.seq_no.isnot(None))
+        if origin:
+            ids = with_origin(db.query(ParticipantSession.participant_session_id), origin)
+            gap_query = gap_query.filter(TrialEvent.participant_session_id.in_(ids.subquery()))
+        rows = gap_query.group_by(TrialEvent.participant_session_id).all()
         missing = [(hi - lo + 1) - n for _, lo, hi, n in rows]
         return {
             "sessions_checked": len(rows),
@@ -255,18 +290,24 @@ def panel_quality(db: Session) -> Dict[str, Any]:
 
 def panel_origin(db: Session) -> Dict[str, Any]:
     """
-    Synthetic vs human separation. No data_origin column exists yet
-    (S2-CAT-02), so origin cannot be established from the data; every
-    session is reported as unknown rather than assumed human or synthetic.
+    Synthetic vs human separation. Origin is a recorded fact on each session;
+    NULL means unclassified and is never inferred as human or synthetic.
     """
-    total = _safe(
-        db, lambda: db.query(func.count(ParticipantSession.participant_session_id)).scalar()
-    )
+
+    def counts() -> Dict[str, int]:
+        out = {k: 0 for k in ORIGINS}
+        for origin, n in db.query(ParticipantSession.data_origin, func.count()).group_by(
+            ParticipantSession.data_origin
+        ):
+            out[origin or "unclassified"] = n
+        return out
+
+    c = _safe(db, counts)
     return {
-        "synthetic": None,
-        "human_observed": None,
-        "unknown": total,
-        "note": "No data_origin classification is stored yet; values are not assumed.",
+        "synthetic": None if c is None else c["synthetic"],
+        "human_observed": None if c is None else c["human_observed"],
+        "unclassified": None if c is None else c["unclassified"],
+        "note": "Unclassified sessions are not assumed human or synthetic.",
     }
 
 
@@ -289,14 +330,21 @@ def panel_unmeasured() -> Dict[str, Any]:
     }
 
 
-def home(db: Session) -> Dict[str, Any]:
+def home(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
     fresh = freshness(db)
     return {
-        "ingestion": panel_ingestion(db),
+        "origin_filter": origin,
+        "ingestion": panel_ingestion(db, origin),
         "jobs": panel_jobs(db),
-        "quality": panel_quality(db),
+        "quality": panel_quality(db, origin),
         "origin": panel_origin(db),
         **panel_unmeasured(),
+        "alerts_open": _safe(
+            db,
+            lambda: db.query(func.count(OpsAlert.alert_id))
+            .filter(OpsAlert.status == "open")
+            .scalar(),
+        ),
         "freshness": fresh,
         "as_of": {f["source"]: f["last_event_at"] for f in fresh},
     }
@@ -317,6 +365,7 @@ class Failure:
     error: Any
     since: Any
     retry_eligible: bool
+    correlation_id: Any = None
 
     def as_dict(self, now: datetime) -> Dict[str, Any]:
         return {
@@ -329,9 +378,16 @@ class Failure:
             "since": iso(self.since),
             "age_seconds": age_seconds(self.since, now),
             "retry_eligible": self.retry_eligible,
-            # Correlation IDs are not recorded yet (S2-CAT-03).
-            "correlation_id": None,
+            "correlation_id": self.correlation_id,
         }
+
+
+JOB_GROUPS = (
+    ("dead", "Dead-lettered jobs (retries exhausted)", "engineering"),
+    ("failed", "Failed jobs", "engineering"),
+    ("lease_expired", "Worker lost (lease expired)", "engineering"),
+    ("stale_queued", "Queued but never started", "engineering"),
+)
 
 
 def collect_failures(db: Session, limit: int = 200) -> List[Dict[str, Any]]:
@@ -392,11 +448,35 @@ def collect_failures(db: Session, limit: int = 200) -> List[Dict[str, Any]]:
             )
         )
 
+    tracked = {(j.kind, j.ref) for j in db.query(OpsJob.kind, OpsJob.ref)}
+
+    for state_name, label, owner in JOB_GROUPS:
+        for j in db.query(OpsJob).filter(
+            OpsJob.status.in_(("queued", "running", "failed", "dead"))
+        ):
+            if job_tracker.classify(j, now) != state_name:
+                continue
+            out.append(
+                Failure(
+                    f"job:{j.job_id}",
+                    "job",
+                    f"{j.kind}:{j.ref}",
+                    label,
+                    owner,
+                    j.error or label,
+                    j.finished_at or j.started_at or j.enqueued_at,
+                    True,
+                    j.correlation_id,
+                )
+            )
+
     for u in db.query(AcquisitionUpload).filter(
         AcquisitionUpload.status == "pending",
         AcquisitionUpload.committed.is_(True),
         AcquisitionUpload.updated_at < now - STUCK_UPLOAD_AFTER,
     ):
+        if (job_tracker.UPLOAD_VERIFY, u.upload_id) in tracked:
+            continue
         out.append(
             Failure(
                 f"upload:{u.upload_id}",
@@ -415,6 +495,8 @@ def collect_failures(db: Session, limit: int = 200) -> List[Dict[str, Any]]:
         ParticipantSession.scores.is_(None),
         ParticipantSession.completed_at < now - STUCK_UPLOAD_AFTER,
     ):
+        if (job_tracker.SCORING, s.participant_session_id) in tracked:
+            continue
         out.append(
             Failure(
                 f"scoring:{s.participant_session_id}",
@@ -425,6 +507,7 @@ def collect_failures(db: Session, limit: int = 200) -> List[Dict[str, Any]]:
                 "Session completed without scores",
                 s.completed_at,
                 True,
+                s.correlation_id,
             )
         )
 
@@ -460,12 +543,40 @@ class RetryNotEligible(Exception):
     pass
 
 
+def _dispatch(db: Session, kind: str, ref: str) -> None:
+    """Record the durable job, then hand it to the queue (idempotent by kind/ref)."""
+    if kind == job_tracker.UPLOAD_VERIFY:
+        from app.tasks.acquisition_tasks import verify_acquisition_upload
+
+        job_tracker.record_enqueue(db, kind, ref)
+        verify_acquisition_upload.delay(ref)
+    elif kind == job_tracker.SCORING:
+        from app.tasks.scoring_tasks import score_participant_session
+
+        job_tracker.record_enqueue(db, kind, ref)
+        score_participant_session.delay(ref)
+    else:
+        raise RetryNotEligible("this job kind has no safe retry")
+
+
 def retry_job(db: Session, job_id: str) -> Dict[str, Any]:
-    """Re-enqueue an eligible job. Both targets are idempotent by ID."""
+    """Re-enqueue an eligible job. All targets are idempotent by ID."""
     kind, _, ref = job_id.partition(":")
     now = utcnow()
 
-    if kind == "upload":
+    if kind == "job":
+        job = db.get(OpsJob, ref)
+        if job is None:
+            raise LookupError(job_id)
+        if job_tracker.classify(job, now) not in (
+            "failed",
+            "dead",
+            "lease_expired",
+            "stale_queued",
+        ):
+            raise RetryNotEligible("job is not failed, lost or stale")
+        _dispatch(db, str(job.kind), str(job.ref))
+    elif kind == "upload":
         rec = db.get(AcquisitionUpload, ref)
         if rec is None:
             raise LookupError(job_id)
@@ -473,18 +584,14 @@ def retry_job(db: Session, job_id: str) -> Dict[str, Any]:
             raise RetryNotEligible(
                 "only committed uploads still pending verification can be retried"
             )
-        from app.tasks.acquisition_tasks import verify_acquisition_upload
-
-        verify_acquisition_upload.delay(ref)
+        _dispatch(db, job_tracker.UPLOAD_VERIFY, ref)
     elif kind == "scoring":
         ps = db.get(ParticipantSession, ref)
         if ps is None:
             raise LookupError(job_id)
         if ps.status != ParticipantSessionStatus.COMPLETED or ps.scores is not None:
             raise RetryNotEligible("only completed, unscored sessions can be re-scored")
-        from app.tasks.scoring_tasks import score_participant_session
-
-        score_participant_session.delay(ref)
+        _dispatch(db, job_tracker.SCORING, ref)
     else:
         raise RetryNotEligible("this job kind has no safe retry")
 
@@ -505,7 +612,10 @@ def catalog_search(
     status: Optional[str],
     page: int,
     per_page: int,
+    origin: Optional[str] = None,
 ) -> Dict[str, Any]:
+    if origin:
+        kind = "session"  # origin is recorded on sessions only
     items: List[Dict[str, Any]] = []
     total = 0
 
@@ -513,7 +623,7 @@ def catalog_search(
         return col.ilike(f"%{q}%")
 
     if kind in (None, "session"):
-        qs = db.query(ParticipantSession)
+        qs = with_origin(db.query(ParticipantSession), origin)
         if q:
             qs = qs.filter(like(ParticipantSession.participant_session_id))
         if status:
@@ -528,7 +638,7 @@ def catalog_search(
                     "device_tier": s.device_tier,
                     "study_id": s.study_id,
                     "created_at": iso(s.created_at),
-                    "origin": None,
+                    "origin": s.data_origin,
                 }
             )
     if kind in (None, "upload"):
@@ -622,5 +732,19 @@ def session_detail(db: Session, session_id: str) -> Optional[Dict[str, Any]]:
         "trial_event_count": batches[0],
         "scored": s.scores is not None,
         "events": events,
-        "origin": None,
+        "origin": s.data_origin,
+        "correlation_id": s.correlation_id,
     }
+
+
+def classify_session(db: Session, session_id: str, origin: str) -> Dict[str, Any]:
+    """Record a session's factual origin. Reclassifying is allowed but returns the prior value."""
+    if origin not in ("synthetic", "human_observed"):
+        raise ValueError("origin must be synthetic or human_observed")
+    ps = db.get(ParticipantSession, session_id)
+    if ps is None:
+        raise LookupError(session_id)
+    previous = ps.data_origin
+    ps.data_origin = origin  # type: ignore[assignment]
+    db.commit()
+    return {"id": session_id, "origin": origin, "previous": previous}

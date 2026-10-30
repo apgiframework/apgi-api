@@ -37,6 +37,7 @@ from app.exception_handlers import register_exception_handlers
 from app.middleware.alerting import configure_alerting
 from app.middleware.api_versioning import APIVersioningMiddleware
 from app.middleware.authentication import AuthenticationMiddleware
+from app.middleware.correlation import CorrelationIdMiddleware
 from app.middleware.cors_config import configure_cors
 from app.middleware.csrf import CSRFMiddleware
 from app.middleware.deprecation import DeprecationMiddleware
@@ -319,6 +320,9 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
 
     # Add request logging middleware
     app.add_middleware(RequestLoggingMiddleware)
+
+    # Correlation IDs wrap request logging so every log line carries one
+    app.add_middleware(CorrelationIdMiddleware)
 
     # Add API versioning middleware (adds version headers to all responses)
     app.add_middleware(APIVersioningMiddleware)

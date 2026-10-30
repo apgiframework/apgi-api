@@ -1191,6 +1191,18 @@ class ParticipantSession(Base):  # type: ignore[misc, valid-type]
     norm_eligible = Column(
         Boolean, nullable=True, index=True, comment="Whether this session may contribute to norms"
     )
+    data_origin = Column(
+        String(20),
+        nullable=True,
+        index=True,
+        comment="Factual origin: synthetic | human_observed; NULL = unclassified (never inferred)",
+    )
+    correlation_id = Column(
+        String(64),
+        nullable=True,
+        index=True,
+        comment="X-APGI-Correlation-Id of the creating request",
+    )
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
@@ -1444,6 +1456,7 @@ class AcquisitionUpload(Base):  # type: ignore[misc, valid-type]
     status = Column(String(16), nullable=False, default="pending")
     reason = Column(Text, nullable=False, default="")
     committed = Column(Boolean, nullable=False, default=False)
+    correlation_id = Column(String(64), nullable=True, index=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -1462,3 +1475,59 @@ class AcquisitionUpload(Base):  # type: ignore[misc, valid-type]
 
     def __repr__(self) -> str:
         return f"<AcquisitionUpload({self.session_id}/{self.object_name}, {self.status})>"
+
+
+class OpsJob(Base):  # type: ignore[misc, valid-type]
+    """Durable record of a background job, written at enqueue time (S2-CAT-05).
+
+    Lets the console detect jobs that were never dispatched, whose worker died
+    (expired lease) or that exhausted their retries, without relying on the
+    worker to report its own failure.
+    """
+
+    __tablename__ = "ops_jobs"
+
+    job_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    kind = Column(String(32), nullable=False, comment="upload_verify | scoring")
+    ref = Column(String(128), nullable=False, comment="ID of the upload or session worked on")
+    status = Column(
+        String(16), nullable=False, default="queued", comment="queued|running|succeeded|failed|dead"
+    )
+    attempts = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=3)
+    correlation_id = Column(String(64), nullable=True, index=True)
+    error = Column(Text, nullable=True)
+    enqueued_at = Column(DateTime(timezone=True), nullable=False)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_ops_jobs_kind_ref", "kind", "ref"),
+        Index("idx_ops_jobs_status", "status"),
+    )
+
+
+class OpsAlert(Base):  # type: ignore[misc, valid-type]
+    """Deduplicated operational alert with acknowledge/resolve lifecycle."""
+
+    __tablename__ = "ops_alerts"
+
+    alert_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    dedup_key = Column(String(160), nullable=False, index=True)
+    rule = Column(String(40), nullable=False)
+    severity = Column(String(16), nullable=False)
+    title = Column(String(200), nullable=False)
+    detail = Column(Text, nullable=False, default="")
+    status = Column(
+        String(16), nullable=False, default="open", comment="open|acknowledged|resolved"
+    )
+    opened_at = Column(DateTime(timezone=True), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), nullable=False)
+    last_notified_at = Column(DateTime(timezone=True), nullable=True)
+    notify_count = Column(Integer, nullable=False, default=0)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    acknowledged_by = Column(String(64), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("idx_ops_alerts_status", "status"),)

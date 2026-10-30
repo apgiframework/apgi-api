@@ -62,6 +62,12 @@ class StructuredLogger:
         if request_id:
             log_entry["request_id"] = request_id
 
+        from app.middleware.correlation import get_correlation_id
+
+        correlation_id = get_correlation_id()
+        if correlation_id:
+            log_entry["correlation_id"] = correlation_id
+
         return json.dumps(log_entry)
 
     def info(self, message: str, **kwargs: Any) -> None:

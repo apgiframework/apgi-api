@@ -22,7 +22,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -116,6 +116,7 @@ def _check_session_access(
 )
 async def create_participant_session(
     request: ParticipantSessionCreateRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: TokenPayload = Depends(get_current_user),
 ) -> ParticipantSession:
@@ -162,6 +163,8 @@ async def create_participant_session(
             hash_identifier(request.device_fingerprint) if request.device_fingerprint else None
         ),
         email_hash=email_hash_for(participant),
+        data_origin=request.data_origin,
+        correlation_id=getattr(http_request.state, "correlation_id", None),
     )
     db.add(session)
     form_order = get_or_assign_form_order(db, request.participant_id, request.study_id)
@@ -337,8 +340,10 @@ async def complete_participant_session(
         # best-effort — a scoring failure must never fail session completion
         # for the client, which has already finished the battery.
         try:
+            from app.services import job_tracker
             from app.tasks.scoring_tasks import score_participant_session
 
+            job_tracker.record_enqueue(db, job_tracker.SCORING, participant_session_id)
             score_participant_session.delay(participant_session_id)
         except Exception:
             logger.info(

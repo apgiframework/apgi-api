@@ -114,13 +114,21 @@
   }
 
   // ---- Home ----
+  function originFilter(current, onHome) {
+    return h("select", { id: "origin", onchange: onHome ? function (e) {
+      location.hash = "#/home" + (e.target.value ? "?origin=" + e.target.value : "");
+    } : null }, [["", "All"], ["synthetic", "Synthetic"], ["human_observed", "Human-observed"], ["unclassified", "Unclassified"]].map(function (o) {
+      return h("option", { value: o[0], selected: current === o[0] ? "selected" : null }, o[1]);
+    }));
+  }
   function freshnessPill(f) {
     var cls = f.state === "fresh" ? "ok" : f.state === "stale" ? "bad" : "unknown";
     var text = f.source.replace(/_/g, " ") + ": " + (f.state === "unknown" ? "unknown" : f.state + " (" + dur(f.age_seconds) + " ago)");
     return pill(text, cls);
   }
-  function renderHome() {
-    return api("/v1/ops/home").then(function (res) {
+  function renderHome(params) {
+    var originSel = params.get("origin") || "";
+    return api("/v1/ops/home" + (originSel ? "?origin=" + encodeURIComponent(originSel) : "")).then(function (res) {
       var d = res.data;
       var ing = d.ingestion, jobs = d.jobs, q = d.quality, o = d.origin;
       var s = ing.sessions_by_status || {}, up = ing.uploads_by_status || {}, t = jobs.tasks_by_status || {};
@@ -143,14 +151,16 @@
           kv("Running", linkVal(isNull(jobs.tasks_by_status) ? null : t.running, "#/catalog?kind=task&status=running")),
           kv("Failed", linkVal(isNull(jobs.tasks_by_status) ? null : t.failed, "#/failures")),
           kv("Oldest pending", val(jobs.oldest_pending_age_seconds === null && t.pending === 0 ? 0 : jobs.oldest_pending_age_seconds, dur)),
+          kv("Durable jobs lost or stale", linkVal(isNull(jobs.durable_jobs) ? null : jobs.durable_jobs.lease_expired + jobs.durable_jobs.stale_queued, "#/failures")),
+          kv("Dead-lettered (retries exhausted)", linkVal(isNull(jobs.durable_jobs) ? null : jobs.durable_jobs.dead, "#/failures")),
           kv("Stuck running", linkVal(jobs.stuck_running, "#/failures")),
           kv("Webhook deliveries failed", linkVal(jobs.webhook_failed, "#/failures"))
         ]),
         h("section", { class: "panel", "aria-labelledby": "p3" }, [
           h("h2", { id: "p3" }, "3 · Data origin"),
-          kv("Synthetic", val(o.synthetic)),
-          kv("Human-observed", val(o.human_observed)),
-          kv("Unclassified", val(o.unknown)),
+          kv("Synthetic", linkVal(o.synthetic, "#/catalog?origin=synthetic")),
+          kv("Human-observed", linkVal(o.human_observed, "#/catalog?origin=human_observed")),
+          kv("Unclassified", linkVal(o.unclassified, "#/catalog?origin=unclassified")),
           h("p", { class: "muted" }, o.note)
         ]),
         h("section", { class: "panel scientific", "aria-labelledby": "p4" }, [
@@ -180,13 +190,16 @@
       ];
 
       var anyStale = d.freshness.some(function (f) { return f.state === "stale"; });
-      var unclassified = o.unknown;
+      var unclassified = o.unclassified;
       show(h("div", {}, [
         h("h1", {}, "Home"),
         h("p", { class: "muted" }, "Values come straight from the API. Anything that cannot be measured is shown as unknown."),
+        h("label", {}, ["Data origin (panels 1 and 4)", originFilter(originSel, true)]),
+        res.data.origin_filter ? h("div", { class: "banner", role: "status" }, "Panels 1 and 4 show " + res.data.origin_filter.replace("_", "-") + " sessions only.") : null,
         h("div", { class: "fresh", "aria-label": "Source freshness" }, [h("strong", {}, "Freshness:")].concat(d.freshness.map(freshnessPill))),
+        d.alerts_open ? h("div", { class: "banner", role: "status" }, [d.alerts_open + " open alert(s). ", h("a", { href: "#/alerts" }, "Review")]) : null,
         anyStale ? h("div", { class: "banner", role: "status" }, "One or more sources are stale. Check the Failures screen before trusting the counts below.") : null,
-        unclassified ? h("div", { class: "banner", role: "status" }, "Synthetic and human-observed data are not yet distinguishable; all " + unclassified + " sessions are unclassified.") : null,
+        unclassified ? h("div", { class: "banner", role: "status" }, unclassified + " session(s) have no recorded origin and are not assumed human or synthetic.") : null,
         h("div", { class: "grid" }, panels),
         h("button", { class: "btn ghost", onclick: route }, "Refresh")
       ]));
@@ -199,6 +212,7 @@
       return h("option", { value: o[0], selected: params.get("kind") === o[0] ? "selected" : null }, o[1]);
     }));
     var statusIn = h("input", { id: "status", value: params.get("status") || "", placeholder: "e.g. completed" });
+    var originIn = originFilter(params.get("origin") || "");
     var qIn = h("input", { id: "q", type: "search", value: params.get("q") || "", placeholder: "Session or upload ID" });
     var page = parseInt(params.get("page") || "1", 10);
     var results = h("div", {});
@@ -208,9 +222,10 @@
       if (kindSel.value) sp.set("kind", kindSel.value);
       if (statusIn.value) sp.set("status", statusIn.value);
       if (qIn.value) sp.set("q", qIn.value);
+      if (originIn.value) sp.set("origin", originIn.value);
       location.hash = "#/catalog" + (sp.toString() ? "?" + sp.toString() : "");
     } }, [
-      h("label", {}, ["Search", qIn]), h("label", {}, ["Type", kindSel]), h("label", {}, ["Status", statusIn]),
+      h("label", {}, ["Search", qIn]), h("label", {}, ["Type", kindSel]), h("label", {}, ["Origin", originIn]), h("label", {}, ["Status", statusIn]),
       h("button", { class: "btn", type: "submit" }, "Apply")
     ]);
     show(h("div", {}, [h("h1", {}, "Catalog"),
@@ -222,7 +237,7 @@
       var rows = res.data.items.map(function (i) {
         var idCell = i.kind === "session" ? h("a", { href: "#/session/" + encodeURIComponent(i.id) }, i.id) : i.id;
         return h("tr", {}, [h("td", {}, i.kind), h("td", {}, idCell), h("td", {}, i.status),
-          h("td", {}, i.device_tier || "—"), h("td", {}, i.origin || "unknown"), h("td", {}, when(i.created_at))]);
+          h("td", {}, i.device_tier || "—"), h("td", {}, i.origin ? i.origin.replace("_", "-") : (i.kind === "session" ? "unclassified" : "n/a")), h("td", {}, when(i.created_at))]);
       });
       var prev = page > 1 ? h("a", { href: pageHref(params, page - 1) }, "‹ Previous") : null;
       var next = page * 25 < res.data.total ? h("a", { href: pageHref(params, page + 1) }, "Next ›") : null;
@@ -248,7 +263,8 @@
           kv("Status", h("span", { class: "val" }, d.status)),
           kv("Study", h("span", { class: "val" }, d.study_id)),
           kv("Device tier", val(d.device_tier)),
-          kv("Origin", val(d.origin)),
+          kv("Origin", val(d.origin === null ? null : d.origin.replace("_", "-"))),
+          kv("Correlation ID", val(d.correlation_id)),
           kv("Norm eligible", val(d.norm_eligible, String)),
           kv("Trial events", val(d.trial_event_count)),
           kv("Scored", val(d.scored, function (v) { return v ? "yes" : "no"; }))
@@ -268,7 +284,7 @@
       res.data.forEach(function (f) { (groups[f.group] = groups[f.group] || []).push(f); });
       var names = Object.keys(groups);
       var out = [h("h1", {}, "Failures"),
-        h("p", { class: "muted" }, "Failures are detected from stored state, not from handlers reporting their own crashes. Cloud Logging links need correlation IDs, which are not recorded yet.")];
+        h("p", { class: "muted" }, "Failures are detected from stored state, not from handlers reporting their own crashes. Correlation IDs are recorded for sessions created after this release; use them to search Cloud Logging.")];
       if (!names.length) out.push(h("div", { class: "panel" }, [pill("clear", "ok"), " No failures detected in the monitored sources."]));
       names.forEach(function (g) {
         var rows = groups[g].map(function (f) {
@@ -280,16 +296,39 @@
               .catch(function (x) { btn.disabled = false; status.textContent = " " + x.message; });
           } }, "Retry") : h("span", { class: "muted" }, "Not retryable");
           var ref = f.kind === "session" ? h("a", { href: "#/session/" + encodeURIComponent(f.ref) }, f.ref) : f.ref;
-          return h("tr", {}, [h("td", {}, ref), h("td", {}, f.owner_role), h("td", {}, val(f.age_seconds, dur)),
+          return h("tr", {}, [h("td", {}, ref), h("td", {}, f.correlation_id || "not recorded"), h("td", {}, f.owner_role), h("td", {}, val(f.age_seconds, dur)),
             h("td", {}, f.error || "No error recorded"), h("td", {}, [btn, status])]);
         });
         out.push(h("h2", {}, g + " (" + groups[g].length + ")"));
         out.push(h("div", { class: "tablewrap" }, h("table", {}, [
-          h("thead", {}, h("tr", {}, ["Reference", "Owner", "Age", "Error", "Action"].map(function (x) { return h("th", { scope: "col" }, x); }))),
+          h("thead", {}, h("tr", {}, ["Reference", "Correlation ID", "Owner", "Age", "Error", "Action"].map(function (x) { return h("th", { scope: "col" }, x); }))),
           h("tbody", {}, rows)
         ])));
       });
       show(h("div", {}, out));
+    });
+  }
+
+  // ---- Alerts ----
+  function renderAlerts() {
+    return api("/v1/ops/alerts").then(function (res) {
+      var sevCls = { critical: "bad", error: "bad", warning: "warn", info: "unknown" };
+      var rows = res.data.map(function (a) {
+        var status = h("span", { role: "status" });
+        var action = a.status === "open" ? h("button", { class: "btn", onclick: function (e) {
+          e.target.disabled = true;
+          api("/v1/ops/alerts/" + encodeURIComponent(a.alert_id) + ":ack", { method: "POST" })
+            .then(route).catch(function (x) { e.target.disabled = false; status.textContent = " " + x.message; });
+        } }, "Acknowledge") : h("span", { class: "muted" }, a.status === "acknowledged" ? "Acknowledged by " + a.acknowledged_by : "Resolved " + when(a.resolved_at));
+        return h("tr", {}, [h("td", {}, pill(a.severity, sevCls[a.severity] || "unknown")), h("td", {}, a.title),
+          h("td", {}, a.detail), h("td", {}, when(a.opened_at)),
+          h("td", {}, a.status + (a.notified ? "" : " (not delivered)")), h("td", {}, [action, status])]);
+      });
+      show(h("div", {}, [h("h1", {}, "Alerts"),
+        h("p", { class: "muted" }, "One alert per standing condition; a recovery notice is sent when it clears. Delivered by the configured channels (log, webhook, email)."),
+        rows.length ? h("div", { class: "tablewrap" }, h("table", {}, [
+          h("thead", {}, h("tr", {}, ["Severity", "Alert", "Detail", "Opened", "State", "Action"].map(function (x) { return h("th", { scope: "col" }, x); }))),
+          h("tbody", {}, rows)])) : h("div", { class: "panel" }, [pill("clear", "ok"), " No open or recent alerts."])]));
     });
   }
 
@@ -309,7 +348,8 @@
     if (name === "catalog") p = renderCatalog(params);
     else if (name === "session") p = renderSession(decodeURIComponent(path.split("/")[2] || ""));
     else if (name === "failures") p = renderFailures();
-    else p = renderHome();
+    else if (name === "alerts") p = renderAlerts();
+    else p = renderHome(params);
     p.catch(function (e) {
       if (e.status === 403) show(h("div", { class: "panel" }, [h("h1", {}, "Access denied"), h("p", {}, "The console requires an administrator role.")]));
       else if (e.status !== 401) show(h("div", { class: "panel" }, [h("h1", {}, "Could not load"), h("p", { class: "error", role: "alert" }, e.message), h("button", { class: "btn", onclick: route }, "Retry")]));
