@@ -23,6 +23,29 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Verify deploy inputs are configured
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        PROJECT_ID: ${{ inputs.project_id }}
+        REGION: ${{ inputs.region }}
+        WIF_PROVIDER: ${{ inputs.workload_identity_provider }}
+        SERVICE_ACCOUNT: ${{ inputs.service_account }}
+      run: |
+        suffix=$(echo "$ENVIRONMENT" | tr '[:lower:]' '[:upper:]')
+        missing=0
+        check() {
+          if [ -z "$2" ]; then
+            echo "::error::Actions variable $1 is not set (add it under Settings > Secrets and variables > Actions > Variables, or on the '$ENVIRONMENT' environment)"
+            missing=1
+          fi
+        }
+        check "GCP_PROJECT_ID_${suffix}" "$PROJECT_ID"
+        check "GCP_REGION" "$REGION"
+        check "GCP_WIF_PROVIDER_${suffix}" "$WIF_PROVIDER"
+        check "GCP_CI_DEPLOYER_SA_${suffix}" "$SERVICE_ACCOUNT"
+        exit $missing
+
     - id: auth
       name: Authenticate to GCP via Workload Identity Federation
       uses: google-github-actions/auth@v2

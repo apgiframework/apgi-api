@@ -61,11 +61,21 @@ separate remote state prefix (see the commented `backend "gcs"` block in
 `refs/tags/v` restricts production to tagged releases). No service-account
 key file is ever created or stored as a GitHub secret. Feed
 `outputs.wif_provider_resource_name` and
-`outputs.ci_deployer_service_account_email` into the repository's GitHub
-Actions secrets (`GCP_WORKLOAD_IDENTITY_PROVIDER`,
-`GCP_CI_DEPLOYER_SA`) — these are not secrets in the credential sense (they
-name a principal, not a password), but keeping them as Actions variables
-avoids hardcoding project-specific values into the workflow file.
+`outputs.ci_deployer_service_account_email` into GitHub Actions *variables*
+(not secrets), set per environment (`research`, `production`). The deploy
+workflow (`.github/workflows/deploy.yml`) reads:
+
+| Variable | Source |
+| --- | --- |
+| `GCP_PROJECT_ID_RESEARCH` / `GCP_PROJECT_ID_PRODUCTION` | the environment's GCP project ID |
+| `GCP_REGION` | the Cloud Run / Artifact Registry region |
+| `GCP_WIF_PROVIDER_RESEARCH` / `GCP_WIF_PROVIDER_PRODUCTION` | `wif_provider_resource_name` |
+| `GCP_CI_DEPLOYER_SA_RESEARCH` / `GCP_CI_DEPLOYER_SA_PRODUCTION` | `ci_deployer_service_account_email` |
+
+These are not secrets in the credential sense (they name a principal, not a
+password); keeping them as Actions variables avoids hardcoding
+project-specific values into the workflow file. If any is missing, the deploy
+fails immediately in the "Verify deploy inputs are configured" step.
 
 ## IAM matrix
 
