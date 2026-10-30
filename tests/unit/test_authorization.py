@@ -35,6 +35,15 @@ from app.services.authorization import (
 # ---------------------------------------------------------------------------
 
 
+def _empty_chain_db():
+    """MagicMock session whose audit-chain lookup finds no previous record."""
+    db = MagicMock()
+    db.query.return_value.filter.return_value.order_by.return_value.with_for_update.return_value.first.return_value = (
+        None
+    )
+    return db
+
+
 def make_user(
     user_id: str = "u1", roles: list[str] | None = None, permissions: list[str] | None = None
 ) -> Mock:
@@ -474,14 +483,14 @@ class TestCheckPermission:
 
     # --- With DB audit logging ---
     def test_granted_via_role_logs_audit_with_db(self) -> None:
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         user = make_user(roles=["admin"])
         check_permission(user, Permission.SESSION_READ, db=mock_db)
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
 
     def test_denied_logs_audit_with_db(self) -> None:
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         user = make_user(roles=["viewer"])
         with pytest.raises(AuthorizationError):
             check_permission(user, Permission.SESSION_CREATE, db=mock_db)
@@ -489,7 +498,7 @@ class TestCheckPermission:
         mock_db.commit.assert_called_once()
 
     def test_granted_via_direct_permission_logs_audit_with_db(self) -> None:
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         user = make_user(roles=[], permissions=["session:read"])
         check_permission(user, Permission.SESSION_READ, db=mock_db)
         mock_db.add.assert_called_once()
@@ -503,7 +512,7 @@ class TestCheckPermission:
 
     # --- With resource/action/ip/user_agent context ---
     def test_check_permission_with_full_context(self) -> None:
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         user = make_user(roles=["admin"])
         check_permission(
             user,
@@ -540,7 +549,7 @@ class TestCheckPermission:
 
 class TestLogAuditEvent:
     def test_with_db_adds_and_commits(self) -> None:
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         log_audit_event(
             db=mock_db,
             user_id="u1",
@@ -557,7 +566,7 @@ class TestLogAuditEvent:
         log_audit_event(db=None, user_id="u1", action="login", status="success")
 
     def test_with_all_optional_fields(self) -> None:
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         log_audit_event(
             db=mock_db,
             user_id="u1",
@@ -573,19 +582,19 @@ class TestLogAuditEvent:
         mock_db.commit.assert_called_once()
 
     def test_db_exception_is_swallowed(self) -> None:
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         mock_db.add.side_effect = Exception("DB error")
         # Should not raise — exception is caught internally
         log_audit_event(db=mock_db, user_id="u1", action="login", status="success")
 
     def test_with_minimal_args(self) -> None:
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         log_audit_event(db=mock_db)
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
 
     def test_details_defaults_to_empty_dict(self) -> None:
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         log_audit_event(db=mock_db, user_id="u1", action="test", status="success")
         call_args = mock_db.add.call_args[0][0]
         # The AuditLog object should have been created; just verify add was called
@@ -631,14 +640,14 @@ class TestCheckResourceOwnership:
             check_resource_ownership("u1", user, allow_admin=False)
 
     def test_admin_with_db_logs_audit(self) -> None:
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         user = make_user(user_id="u2", roles=["admin"])
         check_resource_ownership("u1", user, allow_admin=True, db=mock_db)
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
 
     def test_owner_with_db_does_not_log_audit(self) -> None:
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         user = make_user(user_id="u1", roles=["viewer"])
         check_resource_ownership("u1", user, db=mock_db)
         # Owner path returns early without audit log
@@ -669,7 +678,7 @@ class TestGetCurrentUser:
         mock_user = make_user(user_id="u1", roles=["admin"])
         request = Mock()
         request.state.user = mock_user
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
 
         result = await get_current_user(request, None, mock_db)
         assert result is mock_user
@@ -685,7 +694,7 @@ class TestGetCurrentUser:
             state = _State()
 
         request = cast(Request, _Request())
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
 
         with pytest.raises(InvalidTokenError):
             await get_current_user(request, None, mock_db)
@@ -699,7 +708,7 @@ class TestGetCurrentUser:
             state = _State()
 
         request = cast(Request, _Request())
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         credentials = Mock()
         credentials.credentials = ""
 
@@ -717,7 +726,7 @@ class TestGetCurrentUser:
             state = _State()
 
         request = cast(Request, _Request())
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
         mock_payload = make_user(user_id="u1", roles=["researcher"])
 
         with patch("app.services.authorization.AuthManager") as MockAuthManager:
@@ -740,7 +749,7 @@ class TestGetCurrentUser:
             state = _State()
 
         request = cast(Request, _Request())
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
 
         with patch("app.services.authorization.AuthManager") as MockAuthManager:
             instance = MockAuthManager.return_value
@@ -762,7 +771,7 @@ class TestGetCurrentUser:
             state = _State()
 
         request = cast(Request, _Request())
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
 
         with patch("app.services.authorization.AuthManager") as MockAuthManager:
             instance = MockAuthManager.return_value
@@ -783,7 +792,7 @@ class TestGetCurrentUser:
             state = _State()
 
         request = cast(Request, _Request())
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
 
         with patch("app.services.authorization.AuthManager") as MockAuthManager:
             instance = MockAuthManager.return_value
@@ -804,7 +813,7 @@ class TestGetCurrentUser:
             state = _State()
 
         request = cast(Request, _Request())
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
 
         with patch("app.services.authorization.AuthManager") as MockAuthManager:
             instance = MockAuthManager.return_value
@@ -825,7 +834,7 @@ class TestGetCurrentUser:
             state = _State()
 
         request = cast(Request, _Request())
-        mock_db = MagicMock()
+        mock_db = _empty_chain_db()
 
         with patch("app.services.authorization.AuthManager") as MockAuthManager:
             instance = MockAuthManager.return_value

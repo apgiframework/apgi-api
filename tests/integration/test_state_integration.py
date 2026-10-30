@@ -171,8 +171,8 @@ class TestStateRoutesIntegration:
 
         assert response.status_code == 200
         data = response.json()
-        assert "events" in data
-        assert "pagination" in data
+        assert data["identifiability_gate"]
+        assert "events" not in data
 
     @pytest.mark.asyncio
     async def test_get_interoceptive_state_authenticated(
@@ -185,8 +185,7 @@ class TestStateRoutesIntegration:
 
         assert response.status_code == 200
         data = response.json()
-        # K7-gated (governing doc §3.6, `interoceptive_body_state`): withheld by default.
-        assert data == {}
+        assert all(not g["exposed"] for g in data["identifiability_gate"])
 
     @pytest.mark.asyncio
     async def test_get_prediction_errors_authenticated(
@@ -200,8 +199,7 @@ class TestStateRoutesIntegration:
         assert response.status_code == 200
         data = response.json()
         assert "session_id" in data
-        assert "time_ms" in data
-        # K7-gated (governing doc §3.6, prediction error params): withheld by default.
+        assert all(not g["exposed"] for g in data["identifiability_gate"])
         assert "prediction_errors" not in data
 
     @pytest.mark.asyncio
@@ -216,7 +214,6 @@ class TestStateRoutesIntegration:
         assert response.status_code == 200
         data = response.json()
         assert "session_id" in data
-        assert "time_ms" in data
-        # K7-gated (governing doc §3.6, `somatic_bias`): withheld by default.
+        assert all(not g["exposed"] for g in data["identifiability_gate"])
         assert "num_markers" not in data
         assert "markers" not in data

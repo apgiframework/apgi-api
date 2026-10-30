@@ -18,12 +18,15 @@ erroring) and is the hook Phase 3-4's scoring pipeline attaches to.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timezone
-from typing import List
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
@@ -107,6 +110,35 @@ def _check_session_access(
             status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this session"
         )
     return participant
+
+
+def event_payload_sha256(event: object) -> str:
+    """SHA-256 over the canonical event content (idempotency / conflict detection)."""
+    body = event.model_dump(mode="json")  # type: ignore[attr-defined]
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _data_quality_alert(participant_session_id: str, event_id: str, kind: str) -> None:
+    logger.warning(
+        "data-quality alert: %s",
+        kind,
+        extra={"participant_session_id": participant_session_id, "event_id": event_id},
+    )
+
+
+def find_sequence_gaps(db: Session, participant_session_id: str) -> List[int]:
+    """Missing seq_nos between 0 and the highest seen (non-fatal; reported)."""
+    seqs = [
+        r[0]
+        for r in db.query(TrialEvent.seq_no).filter(
+            TrialEvent.participant_session_id == participant_session_id,
+            TrialEvent.seq_no.isnot(None),
+        )
+    ]
+    if not seqs:
+        return []
+    return sorted(set(range(0, max(seqs) + 1)) - set(seqs))
 
 
 @router.post(
@@ -212,8 +244,58 @@ async def ingest_trial_events(
 
     require_consent(db, str(session.participant_id), ConsentType.RESEARCH_PARTICIPATION)
 
-    created: List[TrialEvent] = []
+    existing_by_id: Dict[Any, Any] = {
+        t.event_id: t
+        for t in db.query(TrialEvent).filter(
+            TrialEvent.participant_session_id == participant_session_id,
+            TrialEvent.event_id.in_([e.event_id for e in request.events]),
+        )
+    }
+    seq_owner: Dict[Any, Any] = {
+        t.seq_no: t.event_id
+        for t in db.query(TrialEvent).filter(
+            TrialEvent.participant_session_id == participant_session_id,
+            TrialEvent.seq_no.in_([e.seq_no for e in request.events]),
+        )
+    }
+
+    # Validate the whole batch before storing anything: a conflict stores nothing.
+    plan: List[Tuple[Any, str, Optional[TrialEvent]]] = []
+    batch_ids: Dict[Any, Any] = {}
     for event in request.events:
+        digest = event_payload_sha256(event)
+        prior = existing_by_id.get(event.event_id)
+        if prior is None and event.event_id in batch_ids:
+            prior = batch_ids[event.event_id]
+        if prior is not None:
+            prior_hash = prior.payload_sha256 if isinstance(prior, TrialEvent) else prior
+            if prior_hash != digest:
+                _data_quality_alert(participant_session_id, event.event_id, "payload_conflict")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"event_id {event.event_id} already stored with a different payload",
+                )
+            plan.append((event, digest, prior if isinstance(prior, TrialEvent) else None))
+            continue
+        owner = seq_owner.get(event.seq_no)
+        if owner is not None and owner != event.event_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"seq_no {event.seq_no} already used by a different event",
+            )
+        batch_ids[event.event_id] = digest
+        plan.append((event, digest, None))
+
+    created: List[TrialEvent] = []
+    seen_new: Set[str] = set()
+    for event, digest, prior in plan:
+        if prior is not None:
+            prior.duplicate = True
+            created.append(prior)
+            continue
+        if event.event_id in seen_new:
+            continue  # same event twice in one batch: store once
+        seen_new.add(event.event_id)
         raw_gcs_object = None
         if event.raw_payload is not None:
             raw_gcs_object = write_raw_trial_event(
@@ -222,6 +304,10 @@ async def ingest_trial_events(
 
         trial = TrialEvent(
             participant_session_id=participant_session_id,
+            event_id=event.event_id,
+            seq_no=event.seq_no,
+            payload_sha256=digest,
+            timing_provenance=event.timing_provenance,
             task_type=event.task_type,
             trial_index=event.trial_index,
             response_value=event.response_value,
@@ -236,9 +322,18 @@ async def ingest_trial_events(
         session.status = ParticipantSessionStatus.IN_PROGRESS
         session.started_at = datetime.now(timezone.utc)  # type: ignore[assignment]
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflicting trial: (task_type, trial_index) or seq_no already recorded",
+        )
     for trial in created:
+        duplicate = getattr(trial, "duplicate", False)
         db.refresh(trial)
+        trial.duplicate = duplicate
 
     return created
 
@@ -319,6 +414,20 @@ async def complete_participant_session(
         .scalar()
         or 0
     )
+
+    missing = (
+        []
+        if session.status == ParticipantSessionStatus.COMPLETED
+        else find_sequence_gaps(db, participant_session_id)
+    )
+    if missing:
+        return SessionCompletionResponse(
+            participant_session_id=participant_session_id,
+            status=session.status,
+            trial_count=trial_count,
+            awaiting_inputs=True,
+            missing_seq_nos=missing,
+        )
 
     if session.status != ParticipantSessionStatus.COMPLETED:
         session.status = ParticipantSessionStatus.COMPLETED

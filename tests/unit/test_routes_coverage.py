@@ -210,18 +210,6 @@ class TestStateRoutes:
 
         assert get_system_state is not None
 
-    def test_get_ignition_history_imports(self):
-        """Test get ignition history route imports."""
-        from app.routes.state import get_ignition_history
-
-        assert get_ignition_history is not None
-
-    def test_get_interoceptive_state_imports(self):
-        """Test get interoceptive state route imports."""
-        from app.routes.state import get_interoceptive_state
-
-        assert get_interoceptive_state is not None
-
 
 class TestWebhookRoutes:
     """Test webhook route endpoints."""

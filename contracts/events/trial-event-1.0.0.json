@@ -1,0 +1,102 @@
+{
+  "$id": "https://api.apgiframework.com/contracts/events/trial-event-1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "correct": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correct"
+    },
+    "event_id": {
+      "description": "Stable client id; retries reuse it",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Event Id",
+      "type": "string"
+    },
+    "raw_payload": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Full raw trial payload (RT distributions, logs) \u2014 written to restricted storage, not Postgres",
+      "title": "Raw Payload"
+    },
+    "response_value": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Response Value"
+    },
+    "rt_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rt Ms"
+    },
+    "seq_no": {
+      "description": "Per-session sequence number",
+      "minimum": 0,
+      "title": "Seq No",
+      "type": "integer"
+    },
+    "task_type": {
+      "maxLength": 50,
+      "minLength": 1,
+      "title": "Task Type",
+      "type": "string"
+    },
+    "timing_provenance": {
+      "default": "client_monotonic",
+      "description": "Source of rt_ms. HTTP request time is never used as event time.",
+      "enum": [
+        "client_monotonic",
+        "client_wall",
+        "device_sensor"
+      ],
+      "title": "Timing Provenance",
+      "type": "string"
+    },
+    "trial_index": {
+      "minimum": 0,
+      "title": "Trial Index",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "event_id",
+    "seq_no",
+    "task_type",
+    "trial_index"
+  ],
+  "title": "TrialEvent",
+  "type": "object"
+}

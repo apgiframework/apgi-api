@@ -23,6 +23,15 @@ from app.services.authorization import (
 )
 
 
+def _empty_chain_db():
+    """MagicMock session whose audit-chain lookup finds no previous record."""
+    db = MagicMock()
+    db.query.return_value.filter.return_value.order_by.return_value.with_for_update.return_value.first.return_value = (
+        None
+    )
+    return db
+
+
 @pytest.fixture
 def current_user():
     return TokenPayload(
@@ -68,7 +77,7 @@ def test_check_permission_denied(current_user):
 
 def test_check_permission_audit_log(current_user):
     """Test check_permission with audit log."""
-    mock_db = MagicMock()
+    mock_db = _empty_chain_db()
     current_user.roles = ["admin"]
     check_permission(current_user, Permission.SESSION_CREATE, db=mock_db)
     assert mock_db.add.called
@@ -110,7 +119,7 @@ async def test_require_role_denied(current_user):
 
 def test_log_audit_event_failure():
     """Test log_audit_event exception handling."""
-    mock_db = MagicMock()
+    mock_db = _empty_chain_db()
     mock_db.add.side_effect = Exception("DB error")
     # Should not raise
     log_audit_event(mock_db, action="test")

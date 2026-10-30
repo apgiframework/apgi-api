@@ -103,9 +103,9 @@ class TestVersionRoutes:
     @pytest.mark.asyncio
     @patch.dict(os.environ, {"API_BASE_URL": "invalid-url"}, clear=True)
     async def test_get_client_documentation_invalid_base_url(self):
-        """Test client documentation falls back to localhost for invalid URL."""
+        """Test client documentation falls back to the canonical API URL."""
         response = await get_client_documentation(language="python")
-        assert "http://localhost:8000" in response["base_url"]
+        assert response["base_url"] == "https://api.apgiframework.com"
 
     def test_configure_deprecated_endpoints(self):
         """Test configuring deprecated endpoints."""

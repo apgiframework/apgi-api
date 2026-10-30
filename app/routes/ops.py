@@ -6,7 +6,6 @@ Admin-only, aggregate-first. Every response uses the shared envelope
 """
 
 import logging
-import uuid
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,12 +13,9 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.database.connection import get_db
-from app.database.models import AuditLog
 from app.models.schemas import ErrorResponse
 from app.services import ops_monitor, platform_health
-from app.services.audit_signing import sign_audit_entry
 from app.services.authorization import (
     Permission,
     TokenPayload,
@@ -60,29 +56,18 @@ def _audit(
     details: Dict[str, Any],
 ) -> None:
     """
-    Record a sensitive read, signed like every other audit entry. Unlike
-    ``log_audit_event`` this does not swallow failures: if the trail cannot be
-    written the read is refused (500) rather than served unaudited.
+    Record a sensitive read through the shared (signed, hash-chained) audit writer.
+    ``strict`` means a failed write refuses the read (500) instead of serving it unaudited.
     """
-    audit_id = str(uuid.uuid4())
-    signature = None
-    if settings.audit_signing_key:
-        signature = sign_audit_entry(
-            audit_id, user.user_id, action, resource_type, resource_id, "success", details
-        )
-    db.add(
-        AuditLog(
-            audit_id=audit_id,
-            user_id=user.user_id,
-            action=action,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            details=details,
-            status="success",
-            signature=signature,
-        )
+    log_audit_event(
+        db=db,
+        user_id=user.user_id,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        details=details,
+        strict=True,
     )
-    db.commit()
 
 
 def _envelope(data: Any, as_of: Optional[Dict[str, Optional[str]]] = None) -> Dict[str, Any]:

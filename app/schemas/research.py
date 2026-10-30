@@ -12,7 +12,7 @@ control called for in the governing doc's Phase 2 checklist.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -199,8 +199,16 @@ class ParticipantSessionResponse(BaseModel):
 class TrialEventIngestRequest(BaseModel):
     model_config = _FORBID_EXTRA
 
+    event_id: str = Field(
+        ..., min_length=1, max_length=64, description="Stable client id; retries reuse it"
+    )
+    seq_no: int = Field(..., ge=0, description="Per-session sequence number")
     task_type: str = Field(..., min_length=1, max_length=50)
     trial_index: int = Field(..., ge=0)
+    timing_provenance: Literal["client_monotonic", "client_wall", "device_sensor"] = Field(
+        "client_monotonic",
+        description="Source of rt_ms. HTTP request time is never used as event time.",
+    )
     response_value: Optional[dict[str, Any]] = None
     rt_ms: Optional[float] = Field(None, ge=0)
     correct: Optional[bool] = None
@@ -220,9 +228,12 @@ class TrialEventResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     trial_event_id: str
+    event_id: Optional[str] = None
+    seq_no: Optional[int] = None
     task_type: str
     trial_index: int
     received_at: datetime
+    duplicate: bool = Field(False, description="True when this was an acknowledged retry")
 
 
 class SessionCompletionResponse(BaseModel):
@@ -232,7 +243,9 @@ class SessionCompletionResponse(BaseModel):
     participant_session_id: str
     status: ParticipantSessionStatus
     trial_count: int
-    completed_at: datetime
+    completed_at: Optional[datetime] = None
+    awaiting_inputs: bool = False
+    missing_seq_nos: List[int] = Field(default_factory=list)
 
 
 class SessionQualityRequest(BaseModel):

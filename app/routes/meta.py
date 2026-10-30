@@ -12,6 +12,8 @@ catalogues, citation managers) without requiring a token.
 
 from __future__ import annotations
 
+from typing import Any, Optional
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -25,6 +27,7 @@ from app.database.models import (
 )
 from app.schemas.reporting import DatasetCardResponse, MetaResponse
 from app.services.identifiers import load_identifiers
+from app.services.version_lattice import build_stamps
 
 router = APIRouter(tags=["Meta"])
 
@@ -40,7 +43,20 @@ async def get_meta() -> MetaResponse:
         web=ids["web"],
         licences=ids["licences"],
         release_state=ids["release_state"],
+        ethics_number=ids["ethics"].get("approval_number"),
+        version_lattice=_lattice_snapshot(),
     )
+
+
+def _lattice_snapshot() -> dict[str, Any]:
+    """Server-side lattice values (same source as the stamps on every result)."""
+    stamps = build_stamps(battery_version=ids_battery_version())
+    return {k: v for k, v in stamps.items() if v is not None}
+
+
+def ids_battery_version() -> Optional[str]:
+    value = load_identifiers()["release_state"].get("battery_version")
+    return str(value) if value is not None else None
 
 
 @router.get("/v1/dataset-card", response_model=DatasetCardResponse)

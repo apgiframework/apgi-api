@@ -628,6 +628,22 @@ class AuditLog(Base):  # type: ignore[misc, valid-type]
         comment="HMAC-SHA256 over the canonical entry fields (app.services.audit_signing) — "
         "NULL for legacy rows written before signing was added",
     )
+    chain_seq = Column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        nullable=True,
+        unique=True,
+        comment="Position in the hash chain; NULL for legacy rows written before chaining",
+    )
+    prev_record_sha256 = Column(
+        String(64),
+        nullable=True,
+        comment="record_sha256 of the previous chained entry (all zeros for the first)",
+    )
+    signing_key_version = Column(
+        String(32),
+        nullable=True,
+        comment="Version label of the audit signing key that produced `signature`",
+    )
 
     # Relationships
     user = relationship("User", backref="audit_logs")
@@ -1298,6 +1314,9 @@ class TrialEvent(Base):  # type: ignore[misc, valid-type]
     )
     raw_gcs_object = Column(
         String(500), nullable=True, comment="Object path in the restricted raw-trial-events bucket"
+    )
+    timing_provenance = Column(
+        String(30), nullable=True, comment="Where rt_ms came from; never HTTP request time"
     )
     received_at = Column(
         DateTime(timezone=True),

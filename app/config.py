@@ -296,6 +296,9 @@ class Settings:
         # trail after the fact is detectable (score generation / report
         # access events in particular — governing doc §7.4).
         self.audit_signing_key: Optional[str] = os.getenv("AUDIT_SIGNING_KEY")
+        # Label of the signing key (e.g. the Secret Manager version), stored
+        # on every audit row so records verify against the right key after rotation.
+        self.audit_signing_key_version: str = os.getenv("AUDIT_SIGNING_KEY_VERSION", "v1")
 
         # The four consent purposes, independently versioned. A participant
         # must grant each before their data may be used for that purpose

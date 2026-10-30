@@ -92,7 +92,13 @@ def _score_two_sessions(
         participant_session_id = session_resp.json()["participant_session_id"]
 
         events = [
-            {"task_type": "stroop", "trial_index": i, "correct": i < n_correct}
+            {
+                "event_id": f"e{i}",
+                "seq_no": i,
+                "task_type": "stroop",
+                "trial_index": i,
+                "correct": i < n_correct,
+            }
             for i in range(n_trials)
         ]
         ingest_resp = participant.post(

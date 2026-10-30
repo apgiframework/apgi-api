@@ -49,6 +49,7 @@ from app.middleware.logging import (
 from app.middleware.metrics import PrometheusMetricsMiddleware
 from app.middleware.profiling import ProfilingMiddleware
 from app.middleware.rate_limiting import RateLimitingMiddleware
+from app.middleware.release_headers import ReleaseHeadersMiddleware
 from app.middleware.request_size_limit import RequestSizeLimitMiddleware
 from app.middleware.schema_validation import ResponseSchemaValidationMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
@@ -121,6 +122,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Startup
     logger.info("Application starting up", component="lifecycle")
+
+    # Refuse to start without a valid exposure-gate allow-list (PR 2b).
+    from app.modules.scoring.exposure import load_gate_table
+
+    load_gate_table()
 
     # Skip dependency validation in test mode or when TEST_MODE is enabled.
     if getattr(app.state, "test_mode", False) or os.environ.get("TEST_MODE") == "true":
@@ -366,6 +372,7 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
 
     # Add security headers middleware (Outer)
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(ReleaseHeadersMiddleware)
 
     # Add deprecation middleware (Outermost)
     app.add_middleware(
@@ -419,6 +426,11 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
     app.include_router(updates.router)
     app.include_router(ops.router)
     app.include_router(console.router)
+
+    # Dev-only routes (/v1/users/create-default, /v1/profiling/*) never ship to production.
+    if settings.environment != "production":
+        app.include_router(users.dev_router)
+        app.include_router(metrics.dev_router)
 
     # Mount static files for web UI
     web_dir = os.path.join(os.path.dirname(__file__), "..", "web")
