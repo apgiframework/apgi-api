@@ -12,7 +12,7 @@ from typing import Optional
 import sqlalchemy as sa
 from sqlalchemy import JSON, BigInteger, Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DDL, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -982,6 +982,13 @@ class Study(Base):  # type: ignore[misc, valid-type]
         index=True,
         comment="Study lifecycle status",
     )
+    release_state = Column(
+        String(32),
+        nullable=False,
+        default="exploratory",
+        server_default="exploratory",
+        comment="Release state of the study's data (identifiers.yaml release_state vocabulary)",
+    )
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -1561,3 +1568,97 @@ class OpsAlert(Base):  # type: ignore[misc, valid-type]
     resolved_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (Index("idx_ops_alerts_status", "status"),)
+
+
+# ---------------------------------------------------------------------------
+# Append-only / immutability guards (S2-SCH-21, S2-SCH-23.8)
+#
+# Triggers rather than REVOKE: a trigger holds for the table owner too. The
+# Postgres versions live in migration add_governance_tables; these are the
+# SQLite equivalents so the same guarantees are exercised by the unit suite.
+# ---------------------------------------------------------------------------
+
+HOLDOUT_IMMUTABLE_SQLITE = DDL("""
+    CREATE TRIGGER IF NOT EXISTS trg_enrollment_partition_immutable
+    BEFORE UPDATE OF partition ON study_enrollments
+    WHEN OLD.partition IS NOT NULL AND NEW.partition IS NOT OLD.partition
+    BEGIN SELECT RAISE(ABORT, 'study_enrollments.partition is immutable once set'); END;
+    """)
+sa.event.listen(
+    StudyEnrollment.__table__, "after_create", HOLDOUT_IMMUTABLE_SQLITE.execute_if(dialect="sqlite")
+)
+
+
+class ConsentRecord(Base):  # type: ignore[misc, valid-type]
+    """Append-only consent action ledger: one row per grant or withdrawal.
+
+    `participant_id` is deliberately not a foreign key: erasing a participant
+    must not cascade into (or be blocked by) the immutable ledger, which keeps
+    only the pseudonymous id, purpose, version and text hash.
+    """
+
+    __tablename__ = "consent_records"
+
+    record_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    participant_id = Column(String(36), nullable=False, index=True)
+    consent_type = Column(String(32), nullable=False, index=True)
+    action = Column(String(16), nullable=False, comment="grant | withdraw")
+    version = Column(String(20), nullable=True)
+    consent_text_hash = Column(String(64), nullable=True)
+    recorded_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+for _op in ("UPDATE", "DELETE"):
+    sa.event.listen(
+        ConsentRecord.__table__,
+        "after_create",
+        DDL(
+            f"CREATE TRIGGER IF NOT EXISTS trg_consent_records_no_{_op.lower()} "
+            f"BEFORE {_op} ON consent_records "
+            "BEGIN SELECT RAISE(ABORT, 'consent_records is append-only'); END;"
+        ).execute_if(dialect="sqlite"),
+    )
+
+
+class ItemResponse(Base):  # type: ignore[misc, valid-type]
+    """One answered self-report item, stamped with the instrument it came from."""
+
+    __tablename__ = "item_responses"
+
+    item_response_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    participant_session_id = Column(
+        String(36),
+        ForeignKey("participant_sessions.participant_session_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    event_id = Column(String(64), nullable=False)
+    instrument_id = Column(String(64), nullable=False, index=True)
+    instrument_version = Column(String(32), nullable=False)
+    instrument_sha256 = Column(String(64), nullable=False)
+    item_id = Column(String(64), nullable=False)
+    response_value = Column(JSON, nullable=False)
+    payload_sha256 = Column(String(64), nullable=False)
+    received_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("participant_session_id", "event_id", name="uq_item_responses_event"),
+        UniqueConstraint(
+            "participant_session_id", "instrument_id", "item_id", name="uq_item_responses_item"
+        ),
+    )
+
+
+class DataDeletion(Base):  # type: ignore[misc, valid-type]
+    """Durable erasure ledger. Survives the participant: no foreign key."""
+
+    __tablename__ = "data_deletions"
+
+    deletion_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    participant_id = Column(String(36), nullable=False, index=True)
+    status = Column(String(16), nullable=False, default="requested", index=True)
+    requested_by = Column(String(36), nullable=True)
+    requested_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    stores = Column(JSON, nullable=True, comment="Per-store outcome: sql / gcs / bigquery")
+    error = Column(Text, nullable=True)

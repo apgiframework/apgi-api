@@ -15,7 +15,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database.models import Consent, ConsentType
+from app.database.models import Consent, ConsentRecord, ConsentType
 
 
 def hash_consent_text(text_shown: str) -> str:
@@ -41,6 +41,15 @@ def record_consent(
         ip_address=ip_address,
     )
     db.add(consent)
+    db.add(
+        ConsentRecord(
+            participant_id=participant_id,
+            consent_type=consent_type.value,
+            action="grant",
+            version=consent.version,
+            consent_text_hash=consent.consent_text_hash,
+        )
+    )
     db.commit()
     db.refresh(consent)
     return consent
@@ -65,6 +74,11 @@ def revoke_consent(db: Session, participant_id: str, consent_type: ConsentType) 
     for grant in open_grants:
         grant.revoked_at = now  # type: ignore[assignment]
     if open_grants:
+        db.add(
+            ConsentRecord(
+                participant_id=participant_id, consent_type=consent_type.value, action="withdraw"
+            )
+        )
         db.commit()
     return len(open_grants)
 

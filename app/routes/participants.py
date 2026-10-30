@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
-from app.database.models import Consent, ConsentType, Participant
+from app.database.models import Consent, ConsentType, DataDeletion, Participant
 from app.models.schemas import ErrorResponse, TokenPayload
 from app.schemas.research import (
     ConsentGrantRequest,
@@ -144,6 +144,9 @@ async def delete_participant(
     participant = _get_participant_or_404(db, participant_id)
     _check_participant_access(participant, current_user)
 
+    db.add(DataDeletion(participant_id=participant_id, requested_by=current_user.user_id))
+    for consent_type in ConsentType:
+        revoke_consent(db, participant_id, consent_type)
     participant.is_deleted = True  # type: ignore[assignment]
     participant.deleted_at = datetime.now(timezone.utc)  # type: ignore[assignment]
     participant.encrypted_contact_email = None

@@ -28,13 +28,15 @@ within our control) undone.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
+from typing import Optional
 
 from celery import shared_task
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.connection import SessionLocal
-from app.database.models import Participant, ParticipantSession, TrialEvent
+from app.database.models import DataDeletion, Participant, ParticipantSession, TrialEvent
 
 logger = logging.getLogger(__name__)
 
@@ -118,11 +120,43 @@ def _delete_from_bigquery(participant_id: str) -> None:
         )
 
 
+def _record_deletion_outcome(
+    db: Session,
+    participant_id: str,
+    status: str,
+    stores: Optional[dict] = None,
+    error: bool = False,
+) -> None:
+    """Close the newest open data_deletions row; the ledger outlives the participant."""
+    try:
+        row = (
+            db.query(DataDeletion)
+            .filter(
+                DataDeletion.participant_id == participant_id, DataDeletion.status == "requested"
+            )
+            .order_by(DataDeletion.requested_at.desc())
+            .first()
+        )
+        if row is None:
+            row = DataDeletion(participant_id=participant_id)
+            db.add(row)
+        row.status = status  # type: ignore[assignment]
+        row.completed_at = datetime.now(timezone.utc)  # type: ignore[assignment]
+        row.stores = stores  # type: ignore[assignment]
+        if error:
+            row.error = "cascading deletion raised; see worker logs"  # type: ignore[assignment]
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.error("Could not update deletion ledger", exc_info=True)
+
+
 async def _erase_participant_data(participant_id: str) -> None:
     db = SessionLocal()
     try:
         gcs_deleted = _delete_raw_trial_events_from_gcs(participant_id, db)
         _delete_from_bigquery(participant_id)
+        stores = {"gcs_objects_deleted": gcs_deleted, "bigquery": "deleted", "sql": "deleted"}
 
         participant = (
             db.query(Participant).filter(Participant.participant_id == participant_id).first()
@@ -131,12 +165,14 @@ async def _erase_participant_data(participant_id: str) -> None:
             db.delete(participant)  # cascades to consents/enrollments/sessions/trial_events
             db.commit()
 
+        _record_deletion_outcome(db, participant_id, "completed", stores=stores)
         logger.info(
             "Cascading deletion completed",
             extra={"participant_id": participant_id, "gcs_objects_deleted": gcs_deleted},
         )
     except Exception:
         db.rollback()
+        _record_deletion_outcome(db, participant_id, "failed", error=True)
         logger.error(
             "Cascading deletion failed", exc_info=True, extra={"participant_id": participant_id}
         )
