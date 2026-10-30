@@ -197,6 +197,7 @@
         h("label", {}, ["Data origin (panels 1 and 4)", originFilter(originSel, true)]),
         res.data.origin_filter ? h("div", { class: "banner", role: "status" }, "Panels 1 and 4 show " + res.data.origin_filter.replace("_", "-") + " sessions only.") : null,
         h("div", { class: "fresh", "aria-label": "Source freshness" }, [h("strong", {}, "Freshness:")].concat(d.freshness.map(freshnessPill))),
+        d.alerts_open ? h("div", { class: "banner", role: "status" }, [d.alerts_open + " open alert(s). ", h("a", { href: "#/alerts" }, "Review")]) : null,
         anyStale ? h("div", { class: "banner", role: "status" }, "One or more sources are stale. Check the Failures screen before trusting the counts below.") : null,
         unclassified ? h("div", { class: "banner", role: "status" }, unclassified + " session(s) have no recorded origin and are not assumed human or synthetic.") : null,
         h("div", { class: "grid" }, panels),
@@ -308,6 +309,29 @@
     });
   }
 
+  // ---- Alerts ----
+  function renderAlerts() {
+    return api("/v1/ops/alerts").then(function (res) {
+      var sevCls = { critical: "bad", error: "bad", warning: "warn", info: "unknown" };
+      var rows = res.data.map(function (a) {
+        var status = h("span", { role: "status" });
+        var action = a.status === "open" ? h("button", { class: "btn", onclick: function (e) {
+          e.target.disabled = true;
+          api("/v1/ops/alerts/" + encodeURIComponent(a.alert_id) + ":ack", { method: "POST" })
+            .then(route).catch(function (x) { e.target.disabled = false; status.textContent = " " + x.message; });
+        } }, "Acknowledge") : h("span", { class: "muted" }, a.status === "acknowledged" ? "Acknowledged by " + a.acknowledged_by : "Resolved " + when(a.resolved_at));
+        return h("tr", {}, [h("td", {}, pill(a.severity, sevCls[a.severity] || "unknown")), h("td", {}, a.title),
+          h("td", {}, a.detail), h("td", {}, when(a.opened_at)),
+          h("td", {}, a.status + (a.notified ? "" : " (not delivered)")), h("td", {}, [action, status])]);
+      });
+      show(h("div", {}, [h("h1", {}, "Alerts"),
+        h("p", { class: "muted" }, "One alert per standing condition; a recovery notice is sent when it clears. Delivered by the configured channels (log, webhook, email)."),
+        rows.length ? h("div", { class: "tablewrap" }, h("table", {}, [
+          h("thead", {}, h("tr", {}, ["Severity", "Alert", "Detail", "Opened", "State", "Action"].map(function (x) { return h("th", { scope: "col" }, x); }))),
+          h("tbody", {}, rows)])) : h("div", { class: "panel" }, [pill("clear", "ok"), " No open or recent alerts."])]));
+    });
+  }
+
   // ---- Router ----
   function route() {
     if (!state.token) return renderLogin();
@@ -324,6 +348,7 @@
     if (name === "catalog") p = renderCatalog(params);
     else if (name === "session") p = renderSession(decodeURIComponent(path.split("/")[2] || ""));
     else if (name === "failures") p = renderFailures();
+    else if (name === "alerts") p = renderAlerts();
     else p = renderHome(params);
     p.catch(function (e) {
       if (e.status === 403) show(h("div", { class: "panel" }, [h("h1", {}, "Access denied"), h("p", {}, "The console requires an administrator role.")]));

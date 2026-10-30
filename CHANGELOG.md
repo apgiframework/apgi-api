@@ -11,6 +11,8 @@ the apgiframework/apgi-framework release they ship alongside.
   `POST /v1/ops/sessions/{id}:classify`, and `X-APGI-Correlation-Id` middleware.
 - Durable `ops_jobs` records for upload verification and scoring with a lease watchdog
   (`ops.sweep_jobs`); Celery now registers the scoring and erasure tasks.
+- Operational alerts (`ops_alerts`): stale sources, dead/lost jobs, quarantine and task-failure rates,
+  with dedup, acknowledgment, reminders and recovery notices; Alerts screen in the console.
 - Server-side effort/fraud/validity screening (`app/services/screening.py`):
   fast responses, invariant responding, straight-lining/zig-zagging, failed
   attention checks, form-layer bot signals, and duplicate device-fingerprint /

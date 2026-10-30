@@ -124,3 +124,33 @@ async def ops_classify(
         details={"origin": body.origin, "previous": result["previous"]},
     )
     return _envelope(result)
+
+
+@router.get("/alerts", summary="Open and recently resolved alerts")
+async def ops_alerts(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    from app.services import ops_alerts
+
+    return _envelope(ops_alerts.list_alerts(db))
+
+
+@router.post("/alerts/{alert_id}:ack", summary="Acknowledge an alert")
+async def ops_ack_alert(
+    alert_id: str,
+    db: Session = Depends(get_db),
+    current_user: TokenPayload = Depends(get_current_user),
+) -> Dict[str, Any]:
+    from app.services import ops_alerts
+
+    try:
+        alert = ops_alerts.acknowledge(db, alert_id, str(current_user.user_id))
+    except LookupError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Alert not found")
+    log_audit_event(
+        db=db,
+        user_id=current_user.user_id,
+        action="ops_alert:acknowledge",
+        resource_type="ops_alert",
+        resource_id=alert_id,
+        details={"rule": alert.rule},
+    )
+    return _envelope({"alert_id": alert_id, "status": alert.status})

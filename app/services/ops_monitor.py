@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.database.models import (
     AcquisitionUpload,
+    OpsAlert,
     OpsJob,
     ParticipantSession,
     ParticipantSessionStatus,
@@ -59,6 +60,16 @@ def aware(ts: Any) -> Optional[datetime]:
 def iso(ts: Any) -> Optional[str]:
     ts = aware(ts)
     return ts.isoformat() if ts else None
+
+
+def dur_text(seconds: Optional[int]) -> str:
+    if seconds is None:
+        return "unknown"
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    if seconds < 86400:
+        return f"{seconds // 3600}h"
+    return f"{seconds // 86400}d"
 
 
 def age_seconds(ts: Any, now: Optional[datetime] = None) -> Optional[int]:
@@ -328,6 +339,12 @@ def home(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
         "quality": panel_quality(db, origin),
         "origin": panel_origin(db),
         **panel_unmeasured(),
+        "alerts_open": _safe(
+            db,
+            lambda: db.query(func.count(OpsAlert.alert_id))
+            .filter(OpsAlert.status == "open")
+            .scalar(),
+        ),
         "freshness": fresh,
         "as_of": {f["source"]: f["last_event_at"] for f in fresh},
     }

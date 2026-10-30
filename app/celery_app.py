@@ -74,6 +74,10 @@ celery_app.conf.beat_schedule = {
         "task": "process_pending_webhooks",
         "schedule": 60.0,  # Run every minute
     },
+    "ops-evaluate-alerts": {
+        "task": "ops.evaluate_alerts",
+        "schedule": 300.0,
+    },
     "ops-sweep-jobs": {
         "task": "ops.sweep_jobs",
         "schedule": 60.0,

@@ -1506,3 +1506,28 @@ class OpsJob(Base):  # type: ignore[misc, valid-type]
         Index("idx_ops_jobs_kind_ref", "kind", "ref"),
         Index("idx_ops_jobs_status", "status"),
     )
+
+
+class OpsAlert(Base):  # type: ignore[misc, valid-type]
+    """Deduplicated operational alert with acknowledge/resolve lifecycle."""
+
+    __tablename__ = "ops_alerts"
+
+    alert_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    dedup_key = Column(String(160), nullable=False, index=True)
+    rule = Column(String(40), nullable=False)
+    severity = Column(String(16), nullable=False)
+    title = Column(String(200), nullable=False)
+    detail = Column(Text, nullable=False, default="")
+    status = Column(
+        String(16), nullable=False, default="open", comment="open|acknowledged|resolved"
+    )
+    opened_at = Column(DateTime(timezone=True), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), nullable=False)
+    last_notified_at = Column(DateTime(timezone=True), nullable=True)
+    notify_count = Column(Integer, nullable=False, default=0)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    acknowledged_by = Column(String(64), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("idx_ops_alerts_status", "status"),)

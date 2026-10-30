@@ -78,6 +78,23 @@ source. Recommended: record D6 as "Celery now, behind a thin enqueue interface" 
 - Fix included: `scoring_tasks` and `deletion_tasks` were missing from Celery's `include` list, so a
   worker would not have registered `score_participant_session` or `erase_participant_data`.
 
+## Alerting (batch 4)
+
+- Migration `add_ops_alerts`; `app/services/ops_alerts.py`; Celery beat `ops.evaluate_alerts` every 5 min.
+- Rules: stale source (a source with no data at all stays *unknown*, not an alert), dead-lettered job,
+  worker lost / never started, quarantined+rejected chunks >= `ALERT_QUARANTINE_THRESHOLD` (5) in 24 h,
+  failed tasks >= `ALERT_FAILED_TASK_THRESHOLD` (5) in 1 h.
+- Lifecycle: one alert per standing condition (dedup key); unacknowledged alerts remind every
+  `ALERT_REMINDER_HOURS` (24); acknowledged alerts stay quiet; clearing sends a "Recovered" notice. An alert
+  no channel accepted is retried next cycle.
+- Delivery reuses `app/middleware/alerting.py` channels: log (default on), webhooks (`ALERT_WEBHOOK_URLS`),
+  email (`SMTP_SERVER` + `ALERT_EMAIL_RECIPIENTS`). The existing Cloud Monitoring email channel from the
+  plan is **not** wired; Terraform alert policies (S0-DPA-03) remain to do.
+- Console: Alerts screen (acknowledge), Home banner. API: `GET /v1/ops/alerts`, `POST /v1/ops/alerts/{id}:ack`.
+- Tests (`tests/unit/test_ops_alerts.py`) inject faults and check routing, dedup, acknowledgment, recovery
+  and retry. Not done: staging fault injection with real email delivery, overdue-purge alerts (no ledger),
+  and severity-based escalation.
+
 ## Use
 
 Sign in at `/console` with an admin account. Tests: `pytest tests/unit/test_ops_console.py`.
