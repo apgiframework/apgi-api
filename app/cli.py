@@ -86,6 +86,30 @@ def worker(queues: str, concurrency: int, loglevel: str, hostname: str) -> None:
         sys.exit(1)
 
 
+@cli.command("verify-audit-chain")
+def verify_audit_chain() -> None:
+    """Verify the audit log's hash chain and signatures; exit 1 on the first break."""
+    from app.database.connection import SessionLocal
+    from app.database.models import AuditLog
+    from app.services.audit_signing import verify_chain
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(AuditLog)
+            .filter(AuditLog.chain_seq.isnot(None))
+            .order_by(AuditLog.chain_seq)
+            .all()
+        )
+        ok, broken_id = verify_chain(rows)
+    finally:
+        db.close()
+    if not ok:
+        click.echo(f"AUDIT CHAIN BROKEN at audit_id={broken_id}", err=True)
+        sys.exit(1)
+    click.echo(f"Audit chain intact: {len(rows)} chained records verified")
+
+
 @cli.command()
 @click.option("--users", "-u", default=10, help="Number of users to create")
 @click.option("--templates", "-t", default=5, help="Number of templates to create")

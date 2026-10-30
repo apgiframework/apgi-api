@@ -9,3 +9,11 @@ source_modules =
     app.modules
 forbidden_modules =
     app.routes
+
+[importlinter:contract:services-independent-of-routes]
+name = Services must not import HTTP routes
+type = forbidden
+source_modules =
+    app.services
+forbidden_modules =
+    app.routes

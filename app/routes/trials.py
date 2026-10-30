@@ -33,6 +33,7 @@ from app.database.connection import get_db
 from app.database.models import (
     Battery,
     ConsentType,
+    ModelVersion,
     Participant,
     ParticipantSession,
     ParticipantSessionStatus,
@@ -186,7 +187,12 @@ async def create_participant_session(
         or 0
     ) + 1
 
+    # Model binding at authorisation: the model that will process this session is
+    # fixed now; scoring loads exactly this version or fails (S2-GATE-03).
+    active_model = db.query(ModelVersion).filter(ModelVersion.is_active.is_(True)).first()
+
     session = ParticipantSession(
+        model_version_id=active_model.model_version_id if active_model is not None else None,
         participant_id=request.participant_id,
         study_id=request.study_id,
         battery_id=request.battery_id,

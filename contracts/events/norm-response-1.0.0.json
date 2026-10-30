@@ -1,0 +1,122 @@
+{
+  "$id": "https://api.apgiframework.com/contracts/events/norm-response-1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "battery_id": {
+      "title": "Battery Id",
+      "type": "string"
+    },
+    "metric": {
+      "title": "Metric",
+      "type": "string"
+    },
+    "min_cell_size": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Min Cell Size"
+    },
+    "n": {
+      "title": "N",
+      "type": "integer"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note"
+    },
+    "percentile": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Percentile"
+    },
+    "percentile_ci_lower": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Percentile Ci Lower"
+    },
+    "percentile_ci_upper": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Percentile Ci Upper"
+    },
+    "release_state": {
+      "title": "Release State",
+      "type": "string"
+    },
+    "score": {
+      "title": "Score",
+      "type": "number"
+    },
+    "study_id": {
+      "title": "Study Id",
+      "type": "string"
+    },
+    "suppressed": {
+      "default": false,
+      "title": "Suppressed",
+      "type": "boolean"
+    },
+    "suppression_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Suppression Reason"
+    },
+    "task_type": {
+      "title": "Task Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "study_id",
+    "battery_id",
+    "task_type",
+    "metric",
+    "score",
+    "n",
+    "release_state"
+  ],
+  "title": "NormResponse",
+  "type": "object"
+}

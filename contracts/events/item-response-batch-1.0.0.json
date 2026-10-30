@@ -1,0 +1,66 @@
+{
+  "$defs": {
+    "ItemAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Event Id",
+          "type": "string"
+        },
+        "item_id": {
+          "title": "Item Id",
+          "type": "integer"
+        },
+        "value": {
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event_id",
+        "item_id",
+        "value"
+      ],
+      "title": "ItemAnswer",
+      "type": "object"
+    }
+  },
+  "$id": "https://api.apgiframework.com/contracts/events/item-response-batch-1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "instrument_id": {
+      "title": "Instrument Id",
+      "type": "string"
+    },
+    "instrument_sha256": {
+      "maxLength": 64,
+      "minLength": 64,
+      "title": "Instrument Sha256",
+      "type": "string"
+    },
+    "instrument_version": {
+      "title": "Instrument Version",
+      "type": "string"
+    },
+    "responses": {
+      "items": {
+        "$ref": "#/$defs/ItemAnswer"
+      },
+      "maxItems": 500,
+      "minItems": 1,
+      "title": "Responses",
+      "type": "array"
+    }
+  },
+  "required": [
+    "instrument_id",
+    "instrument_version",
+    "instrument_sha256",
+    "responses"
+  ],
+  "title": "ItemResponseBatch",
+  "type": "object"
+}

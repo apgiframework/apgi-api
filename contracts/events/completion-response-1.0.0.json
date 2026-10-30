@@ -1,0 +1,63 @@
+{
+  "$defs": {
+    "ParticipantSessionStatus": {
+      "description": "Lifecycle of a single participant's administration of a battery.",
+      "enum": [
+        "scheduled",
+        "in_progress",
+        "completed",
+        "abandoned"
+      ],
+      "title": "ParticipantSessionStatus",
+      "type": "string"
+    }
+  },
+  "$id": "https://api.apgiframework.com/contracts/events/completion-response-1.0.0.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The session-completion contract: what a client gets back once a\nparticipant session is marked complete and handed to scoring.",
+  "properties": {
+    "awaiting_inputs": {
+      "default": false,
+      "title": "Awaiting Inputs",
+      "type": "boolean"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed At"
+    },
+    "missing_seq_nos": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Missing Seq Nos",
+      "type": "array"
+    },
+    "participant_session_id": {
+      "title": "Participant Session Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ParticipantSessionStatus"
+    },
+    "trial_count": {
+      "title": "Trial Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "participant_session_id",
+    "status",
+    "trial_count"
+  ],
+  "title": "CompletionResponse",
+  "type": "object"
+}

@@ -59,6 +59,24 @@ jobs:
           ENVIRONMENT: test
         run: pytest tests/unit/ -q
 
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/apgi_test
+          REDIS_URL: redis://localhost:6379/0
+          ENVIRONMENT: test
+        run: pytest tests/integration/ -q
+
+      - name: Frozen OpenAPI has not drifted
+        run: PYTHONPATH=. python scripts/export_openapi.py --check
+
+      - name: Migrations apply to an empty database and match the ORM
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/apgi_test
+          ENVIRONMENT: test
+        run: |
+          alembic upgrade head
+          PYTHONPATH=. python scripts/check_migration_drift.py
+
   deploy-research:
     name: Deploy to research
     if: github.ref == 'refs/heads/main'

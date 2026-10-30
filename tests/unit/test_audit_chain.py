@@ -104,3 +104,80 @@ def test_score_session_writes_verifiable_chained_record_and_tamper_fails(monkeyp
     rows[0].details = {**d, "output_sha256": "0" * 64}
     db.commit()
     assert verify_chain(_rows(db)) == (False, rows[0].audit_id)
+
+
+def test_verify_audit_chain_cli(db, monkeypatch):
+    from click.testing import CliRunner
+
+    import app.database.connection as connection
+    from app.cli import cli
+
+    _write(db)
+    monkeypatch.setattr(connection, "SessionLocal", lambda: db)
+    result = CliRunner().invoke(cli, ["verify-audit-chain"])
+    assert result.exit_code == 0 and "3 chained records" in result.output
+
+    row = _rows(db)[0]
+    row.details = {"i": 42}
+    db.commit()
+    result = CliRunner().invoke(cli, ["verify-audit-chain"])
+    assert result.exit_code == 1
+
+
+def _scored_session_db():
+    from app.database.models import Battery, Participant, Study
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    participant, study = Participant(), Study(name="s")
+    db.add_all([participant, study])
+    db.commit()
+    battery = Battery(study_id=study.study_id, name="b", version="1.0", form_label="A")
+    db.add(battery)
+    db.commit()
+    return db, participant, study, battery
+
+
+def test_scoring_uses_the_model_bound_at_authorisation_not_the_active_one():
+    from app.database.models import ModelVersion, ParticipantSession
+    from app.services.scoring import score_session
+
+    db, participant, study, battery = _scored_session_db()
+    old = ModelVersion(version="1.0", is_active=True)
+    db.add(old)
+    db.commit()
+    session = ParticipantSession(
+        participant_id=participant.participant_id,
+        study_id=study.study_id,
+        battery_id=battery.battery_id,
+        model_version_id=old.model_version_id,  # bound when processing was authorised
+    )
+    db.add(session)
+    old.is_active = False
+    db.add(ModelVersion(version="2.0", is_active=True))  # newer model activated afterwards
+    db.commit()
+
+    scored = score_session(db, session.participant_session_id)
+    assert scored.scores["stamps"]["model_version"] == "1.0"
+    assert scored.model_version_id == old.model_version_id
+
+
+def test_scoring_fails_when_the_bound_model_is_gone():
+    import pytest
+
+    from app.database.models import ParticipantSession
+    from app.services.scoring import ModelBindingError, score_session
+
+    db, participant, study, battery = _scored_session_db()
+    db.execute(__import__("sqlalchemy").text("PRAGMA foreign_keys=OFF"))
+    session = ParticipantSession(
+        participant_id=participant.participant_id,
+        study_id=study.study_id,
+        battery_id=battery.battery_id,
+        model_version_id="missing-model",
+    )
+    db.add(session)
+    db.commit()
+    with pytest.raises(ModelBindingError):
+        score_session(db, session.participant_session_id)

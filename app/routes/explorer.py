@@ -37,7 +37,12 @@ from app.schemas.explorer import (
     ScoreAllowlistResponse,
 )
 from app.services import explorer_contract as contract
-from app.services.authorization import get_current_user, log_audit_event
+from app.services.authorization import (
+    Role,
+    get_current_user,
+    has_any_role,
+    log_audit_event,
+)
 from app.services.consent import require_consent
 from app.services.rls import set_rls_context
 from app.services.trial_storage import write_raw_trial_event
@@ -252,7 +257,14 @@ async def get_explorer_result(
         action="explorer_result:read",
         resource_type="participant_session",
         resource_id=participant_session_id,
-        details={},
+        details={
+            "purpose": (
+                "staff_review"
+                if str(session.participant_id) != str(current_user.user_id)
+                and has_any_role(current_user.roles, [Role.ADMIN, Role.RESEARCHER])
+                else "self_view"
+            )
+        },
     )
     return ExplorerResultResponse(
         participant_session_id=participant_session_id,

@@ -88,3 +88,54 @@ def test_dev_routes_absent_in_production(monkeypatch, path):
     assert path in create_app(test_mode=True).openapi()["paths"]
     monkeypatch.setattr(app_main.settings, "environment", "production")
     assert path not in create_app(test_mode=True).openapi()["paths"]
+
+
+def _cleared_table(**scope_overrides):
+    scope = {
+        "model": "apgi",
+        "model_version": "1.0",
+        "observation_model": "gaussian",
+        "task_design": "oddball-v1",
+        "population": "adult-online",
+        **scope_overrides,
+    }
+    return {
+        "gate_table_version": "9.9.9",
+        "outbound_allow_list": ["parameter"],
+        "latent_parameters": {
+            "precision_exteroceptive": {
+                "status": "cleared",
+                "evidence": {
+                    "validation_id": "val-1",
+                    "dataset_sha256": "a" * 64,
+                    "reviewer": "r",
+                    "scope": scope,
+                },
+            }
+        },
+    }
+
+
+def test_clearance_is_scoped_to_the_paradigm_where_recovery_was_shown():
+    from app.modules.scoring.exposure import _validate_clearances
+
+    table = _cleared_table()
+    _validate_clearances(table["latent_parameters"])
+    gate = ExposureGate(table)
+    assert gate.is_cleared("precision_exteroceptive", task_design="oddball-v1")
+    assert not gate.is_cleared("precision_exteroceptive", task_design="other-task")
+    assert not gate.is_cleared("somatic_bias")
+
+
+def test_clearance_without_evidence_or_scope_fails_closed_at_load():
+    import pytest
+
+    from app.modules.scoring.exposure import GateTableError, _validate_clearances
+
+    table = _cleared_table(population="")
+    with pytest.raises(GateTableError, match="scope.population"):
+        _validate_clearances(table["latent_parameters"])
+    table = _cleared_table()
+    del table["latent_parameters"]["precision_exteroceptive"]["evidence"]["reviewer"]
+    with pytest.raises(GateTableError, match="reviewer"):
+        _validate_clearances(table["latent_parameters"])

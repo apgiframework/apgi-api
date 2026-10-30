@@ -53,7 +53,27 @@ def load_gate_table() -> Dict[str, Any]:
         raise GateTableError(
             "Gate table needs gate_table_version, latent_parameters and an allow-list"
         )
+    _validate_clearances(table["latent_parameters"])
     return table
+
+
+# A clearance is only valid when it names who reviewed which validation run on
+# which dataset, and the exact scope in which recovery was demonstrated.
+EVIDENCE_FIELDS = ("validation_id", "dataset_sha256", "reviewer")
+SCOPE_FIELDS = ("model", "model_version", "observation_model", "task_design", "population")
+
+
+def _validate_clearances(latent: Dict[str, Any]) -> None:
+    """Fail closed at start-up on any 'cleared' entry lacking evidence or scope."""
+    for name, entry in latent.items():
+        if entry.get("status") != "cleared":
+            continue
+        evidence = entry.get("evidence") or {}
+        missing = [f for f in EVIDENCE_FIELDS if not evidence.get(f)]
+        scope = evidence.get("scope") or {}
+        missing += [f"scope.{f}" for f in SCOPE_FIELDS if not scope.get(f)]
+        if missing:
+            raise GateTableError(f"Clearance for {name!r} is missing {missing}")
 
 
 class ExposureGate:
@@ -78,6 +98,16 @@ class ExposureGate:
         elif isinstance(node, (list, tuple)):
             for item in node:
                 self._walk(item)
+
+    def is_cleared(self, parameter: str, **context: str) -> bool:
+        """True only if `parameter` is cleared AND every scope field in `context`
+        (model, model_version, observation_model, task_design, population) equals
+        the paradigm in which recovery was shown. Unknown parameters are not cleared."""
+        entry = self.table["latent_parameters"].get(parameter)
+        if not entry or entry.get("status") != "cleared":
+            return False
+        scope = (entry.get("evidence") or {}).get("scope") or {}
+        return all(scope.get(key) == value for key, value in context.items())
 
     def gate_state(self, session_id: str, *parameters: str) -> GateStateResponse:
         """Gate state for `parameters` (all latent parameters if none given). Never values."""

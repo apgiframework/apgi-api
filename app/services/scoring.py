@@ -54,6 +54,10 @@ def _task_summary(trials: list[TrialEvent]) -> dict[str, Any]:
     return summary
 
 
+class ModelBindingError(RuntimeError):
+    """The model bound at authorisation cannot be loaded; scoring must not proceed."""
+
+
 def _sha256_json(value: Any) -> str:
     canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -123,7 +127,21 @@ def score_session(db: Session, participant_session_id: str) -> Optional[Particip
         return None
 
     scores = compute_session_scores(db, participant_session)
-    active_model = db.query(ModelVersion).filter(ModelVersion.is_active.is_(True)).first()
+    # The model was bound when processing was authorised (session creation).
+    # Load exactly that version or fail; never fall back to whatever is active now.
+    bound_model: Optional[ModelVersion] = None
+    if participant_session.model_version_id is not None:
+        bound_model = (
+            db.query(ModelVersion)
+            .filter(ModelVersion.model_version_id == participant_session.model_version_id)
+            .first()
+        )
+        if bound_model is None:
+            raise ModelBindingError(
+                f"Model version {participant_session.model_version_id} bound to session "
+                f"{participant_session_id} no longer exists"
+            )
+    active_model = bound_model
     scores["stamps"] = validate_stamps(
         build_stamps(
             battery_version=scores.get("battery_version"),
@@ -138,8 +156,6 @@ def score_session(db: Session, participant_session_id: str) -> Optional[Particip
     )
 
     participant_session.scores = scores  # type: ignore[assignment]
-    if active_model is not None:
-        participant_session.model_version_id = active_model.model_version_id
     # The audit write commits the score with it, so a score never exists
     # without its chained record: with signing configured, a failed audit
     # write rolls the score back (strict) instead of serving it unaudited.

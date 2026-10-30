@@ -45,3 +45,22 @@ def test_trial_event_requires_idempotency_fields():
     bad = {k: v for k, v in _load("fixtures/trial-event.valid.json").items() if k != "event_id"}
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(bad, _load("events/trial-event-1.0.0.json"))
+
+
+@pytest.mark.parametrize(
+    "filename", sorted(__import__("scripts.generate_contracts", fromlist=["x"]).all_schemas())
+)
+def test_every_frozen_schema_matches_its_live_model(filename):
+    from scripts.generate_contracts import all_schemas
+
+    assert _load(f"events/{filename}") == json.loads(
+        json.dumps(all_schemas()[filename], sort_keys=True)
+    )
+
+
+def test_server_rejects_incompatible_trial_event_predictably():
+    from pydantic import ValidationError
+
+    bad = {**_load("fixtures/trial-event.valid.json"), "unexpected_field": 1}
+    with pytest.raises(ValidationError):
+        TrialEventIngestRequest(**bad)
