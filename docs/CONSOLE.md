@@ -9,7 +9,7 @@ First release scope: operational health, ingestion and job status, failure inves
 |---|---|---|
 | Home panel 1 Ingestion | `participant_sessions`, `trial_events`, `acquisition_uploads` | counts link to Catalog / Failures |
 | Home panel 2 Jobs | `tasks`, `webhook_deliveries` | queue backend reported as `celery` |
-| Home panel 3 Data origin | none | no `data_origin` column exists; everything is "unclassified" |
+| Home panel 3 Data origin | `participant_sessions.data_origin` | synthetic / human-observed / unclassified (NULL, never inferred); links to filtered Catalog; origin filter also scopes panels 1 and 4 |
 | Home panel 4 Scientific quality | sessions, trial events | 4 of 14 indicators measurable: completion, interruption, missing events (sequence gaps), device-tier distribution |
 | Home panel 5 Retention/deletion | none | unknown until the deletion ledger (S3-GOV-04) exists |
 | Home panel 6 Platform health | none | unknown until Cloud Monitoring / Cloud SQL Admin are connected (S2-OPS-02) |
@@ -38,14 +38,26 @@ source. Recommended: record D6 as "Celery now, behind a thin enqueue interface" 
 
 ## Gaps against the task list (not built)
 
-- Catalog/ops schemas, `data_origin`, correlation IDs, outbox, durable job records, reconciliation (S2-CAT-01…09).
-  Consequences: no Synthetic/Human split, no Cloud Logging links, failures are *detected from state*
-  (stuck/failed rows) rather than recorded by a watchdog; Track A/B and administration-mode filters omitted.
+- Catalog/ops schemas, outbox, durable job records, reconciliation (S2-CAT-01…09).
+  Consequences: failures are *detected from state*
+  (stuck/failed rows) rather than recorded by a watchdog; Track A/B and administration-mode filters omitted;
+  correlation IDs are stored on sessions only (not yet on uploads/jobs/outbox/Cloud Tasks headers).
 - Console sign-in keeps the JWT in page memory (no HttpOnly cookie, no MFA-specific UI beyond the code field); EN only.
 - Role model has three roles (admin/researcher/viewer), not the eight in §1.6; ops routes are admin-only.
 - Alert delivery, 14-indicator data-quality API, lineage, signed-URL download, export, deletion tracking.
 - Cross-study RLS tests (S3-GOV-01) do not apply yet because ops views are admin-only and aggregate-first;
   session IDs are shown, participant IDs are not.
+
+## Origin and correlation IDs (batch 2)
+
+- Migration `add_session_data_origin` adds `participant_sessions.data_origin` (`synthetic`|`human_observed`|NULL)
+  and `correlation_id`. Existing rows stay NULL (unclassified); run `alembic upgrade head`.
+- `POST /v1/participant-sessions` accepts optional `data_origin`; `POST /v1/ops/sessions/{id}:classify`
+  records it for existing sessions (admin, audited, returns the previous value). Origin is a factual
+  record independent of consent.
+- `CorrelationIdMiddleware` reads `X-APGI-Correlation-Id` (8-64 chars `[A-Za-z0-9._-]`, otherwise a
+  UUIDv4 is minted), puts it in JSON logs and echoes it on the response. Search Cloud Logging for
+  `jsonPayload.correlation_id`. Clients (web, Explorer, upload agent) still need to send the header.
 
 ## Use
 

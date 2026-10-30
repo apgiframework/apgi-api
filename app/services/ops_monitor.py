@@ -77,6 +77,18 @@ def _safe(db: Session, fn: Callable[[], Any]) -> Any:
         return None
 
 
+ORIGINS = ("synthetic", "human_observed", "unclassified")
+
+
+def with_origin(query: Any, origin: Optional[str]) -> Any:
+    """Restrict a ParticipantSession query to one origin class (None = all)."""
+    if origin == "unclassified":
+        return query.filter(ParticipantSession.data_origin.is_(None))
+    if origin in ("synthetic", "human_observed"):
+        return query.filter(ParticipantSession.data_origin == origin)
+    return query
+
+
 def _enum_val(v: Any) -> str:
     return str(getattr(v, "value", v))
 
@@ -121,14 +133,14 @@ def freshness(db: Session) -> List[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def panel_ingestion(db: Session) -> Dict[str, Any]:
+def panel_ingestion(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
     since = utcnow() - timedelta(hours=24)
 
     def sessions() -> Dict[str, int]:
         counts = {s.value: 0 for s in ParticipantSessionStatus}
-        for status, n in db.query(ParticipantSession.status, func.count()).group_by(
-            ParticipantSession.status
-        ):
+        for status, n in with_origin(
+            db.query(ParticipantSession.status, func.count()), origin
+        ).group_by(ParticipantSession.status):
             counts[_enum_val(status)] = n
         return counts
 
@@ -150,7 +162,9 @@ def panel_ingestion(db: Session) -> Dict[str, Any]:
         ),
         "sessions_started_24h": _safe(
             db,
-            lambda: db.query(func.count(ParticipantSession.participant_session_id))
+            lambda: with_origin(
+                db.query(func.count(ParticipantSession.participant_session_id)), origin
+            )
             .filter(ParticipantSession.created_at >= since)
             .scalar(),
         ),
@@ -194,23 +208,24 @@ def panel_jobs(db: Session) -> Dict[str, Any]:
     }
 
 
-def panel_quality(db: Session) -> Dict[str, Any]:
+def panel_quality(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
     """Scientific-quality indicators computable today. Kept apart from operations."""
 
     def completion() -> Dict[str, Any]:
+        count = func.count(ParticipantSession.participant_session_id)
         done = (
-            db.query(func.count(ParticipantSession.participant_session_id))
+            with_origin(db.query(count), origin)
             .filter(ParticipantSession.status == ParticipantSessionStatus.COMPLETED)
             .scalar()
             or 0
         )
         abandoned = (
-            db.query(func.count(ParticipantSession.participant_session_id))
+            with_origin(db.query(count), origin)
             .filter(ParticipantSession.status == ParticipantSessionStatus.ABANDONED)
             .scalar()
             or 0
         )
-        total = db.query(func.count(ParticipantSession.participant_session_id)).scalar() or 0
+        total = with_origin(db.query(count), origin).scalar() or 0
         return {
             "total": total,
             "completion_rate": round(done / total, 4) if total else None,
@@ -219,24 +234,23 @@ def panel_quality(db: Session) -> Dict[str, Any]:
 
     def tiers() -> Dict[str, int]:
         out: Dict[str, int] = {}
-        for tier, n in db.query(ParticipantSession.device_tier, func.count()).group_by(
-            ParticipantSession.device_tier
-        ):
+        for tier, n in with_origin(
+            db.query(ParticipantSession.device_tier, func.count()), origin
+        ).group_by(ParticipantSession.device_tier):
             out[tier or "unknown"] = n
         return out
 
     def seq_gaps() -> Dict[str, int]:
-        rows = (
-            db.query(
-                TrialEvent.participant_session_id,
-                func.min(TrialEvent.seq_no),
-                func.max(TrialEvent.seq_no),
-                func.count(TrialEvent.seq_no),
-            )
-            .filter(TrialEvent.seq_no.isnot(None))
-            .group_by(TrialEvent.participant_session_id)
-            .all()
-        )
+        gap_query = db.query(
+            TrialEvent.participant_session_id,
+            func.min(TrialEvent.seq_no),
+            func.max(TrialEvent.seq_no),
+            func.count(TrialEvent.seq_no),
+        ).filter(TrialEvent.seq_no.isnot(None))
+        if origin:
+            ids = with_origin(db.query(ParticipantSession.participant_session_id), origin)
+            gap_query = gap_query.filter(TrialEvent.participant_session_id.in_(ids.subquery()))
+        rows = gap_query.group_by(TrialEvent.participant_session_id).all()
         missing = [(hi - lo + 1) - n for _, lo, hi, n in rows]
         return {
             "sessions_checked": len(rows),
@@ -255,18 +269,24 @@ def panel_quality(db: Session) -> Dict[str, Any]:
 
 def panel_origin(db: Session) -> Dict[str, Any]:
     """
-    Synthetic vs human separation. No data_origin column exists yet
-    (S2-CAT-02), so origin cannot be established from the data; every
-    session is reported as unknown rather than assumed human or synthetic.
+    Synthetic vs human separation. Origin is a recorded fact on each session;
+    NULL means unclassified and is never inferred as human or synthetic.
     """
-    total = _safe(
-        db, lambda: db.query(func.count(ParticipantSession.participant_session_id)).scalar()
-    )
+
+    def counts() -> Dict[str, int]:
+        out = {k: 0 for k in ORIGINS}
+        for origin, n in db.query(ParticipantSession.data_origin, func.count()).group_by(
+            ParticipantSession.data_origin
+        ):
+            out[origin or "unclassified"] = n
+        return out
+
+    c = _safe(db, counts)
     return {
-        "synthetic": None,
-        "human_observed": None,
-        "unknown": total,
-        "note": "No data_origin classification is stored yet; values are not assumed.",
+        "synthetic": None if c is None else c["synthetic"],
+        "human_observed": None if c is None else c["human_observed"],
+        "unclassified": None if c is None else c["unclassified"],
+        "note": "Unclassified sessions are not assumed human or synthetic.",
     }
 
 
@@ -289,12 +309,13 @@ def panel_unmeasured() -> Dict[str, Any]:
     }
 
 
-def home(db: Session) -> Dict[str, Any]:
+def home(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
     fresh = freshness(db)
     return {
-        "ingestion": panel_ingestion(db),
+        "origin_filter": origin,
+        "ingestion": panel_ingestion(db, origin),
         "jobs": panel_jobs(db),
-        "quality": panel_quality(db),
+        "quality": panel_quality(db, origin),
         "origin": panel_origin(db),
         **panel_unmeasured(),
         "freshness": fresh,
@@ -317,6 +338,7 @@ class Failure:
     error: Any
     since: Any
     retry_eligible: bool
+    correlation_id: Any = None
 
     def as_dict(self, now: datetime) -> Dict[str, Any]:
         return {
@@ -329,8 +351,7 @@ class Failure:
             "since": iso(self.since),
             "age_seconds": age_seconds(self.since, now),
             "retry_eligible": self.retry_eligible,
-            # Correlation IDs are not recorded yet (S2-CAT-03).
-            "correlation_id": None,
+            "correlation_id": self.correlation_id,
         }
 
 
@@ -425,6 +446,7 @@ def collect_failures(db: Session, limit: int = 200) -> List[Dict[str, Any]]:
                 "Session completed without scores",
                 s.completed_at,
                 True,
+                s.correlation_id,
             )
         )
 
@@ -505,7 +527,10 @@ def catalog_search(
     status: Optional[str],
     page: int,
     per_page: int,
+    origin: Optional[str] = None,
 ) -> Dict[str, Any]:
+    if origin:
+        kind = "session"  # origin is recorded on sessions only
     items: List[Dict[str, Any]] = []
     total = 0
 
@@ -513,7 +538,7 @@ def catalog_search(
         return col.ilike(f"%{q}%")
 
     if kind in (None, "session"):
-        qs = db.query(ParticipantSession)
+        qs = with_origin(db.query(ParticipantSession), origin)
         if q:
             qs = qs.filter(like(ParticipantSession.participant_session_id))
         if status:
@@ -528,7 +553,7 @@ def catalog_search(
                     "device_tier": s.device_tier,
                     "study_id": s.study_id,
                     "created_at": iso(s.created_at),
-                    "origin": None,
+                    "origin": s.data_origin,
                 }
             )
     if kind in (None, "upload"):
@@ -622,5 +647,19 @@ def session_detail(db: Session, session_id: str) -> Optional[Dict[str, Any]]:
         "trial_event_count": batches[0],
         "scored": s.scores is not None,
         "events": events,
-        "origin": None,
+        "origin": s.data_origin,
+        "correlation_id": s.correlation_id,
     }
+
+
+def classify_session(db: Session, session_id: str, origin: str) -> Dict[str, Any]:
+    """Record a session's factual origin. Reclassifying is allowed but returns the prior value."""
+    if origin not in ("synthetic", "human_observed"):
+        raise ValueError("origin must be synthetic or human_observed")
+    ps = db.get(ParticipantSession, session_id)
+    if ps is None:
+        raise LookupError(session_id)
+    previous = ps.data_origin
+    ps.data_origin = origin  # type: ignore[assignment]
+    db.commit()
+    return {"id": session_id, "origin": origin, "previous": previous}

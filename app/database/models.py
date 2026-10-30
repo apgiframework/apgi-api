@@ -1191,6 +1191,18 @@ class ParticipantSession(Base):  # type: ignore[misc, valid-type]
     norm_eligible = Column(
         Boolean, nullable=True, index=True, comment="Whether this session may contribute to norms"
     )
+    data_origin = Column(
+        String(20),
+        nullable=True,
+        index=True,
+        comment="Factual origin: synthetic | human_observed; NULL = unclassified (never inferred)",
+    )
+    correlation_id = Column(
+        String(64),
+        nullable=True,
+        index=True,
+        comment="X-APGI-Correlation-Id of the creating request",
+    )
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(

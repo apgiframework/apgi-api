@@ -67,7 +67,7 @@ def test_empty_database_reports_unknown_not_zero(client: TestClient) -> None:
     assert [f["state"] for f in data["freshness"]] == ["unknown"] * 4
     assert data["quality"]["completion"]["completion_rate"] is None
     assert data["infrastructure"]["availability"] is None
-    assert data["origin"]["synthetic"] is None and data["origin"]["human_observed"] is None
+    assert data["origin"]["synthetic"] == 0 and data["origin"]["unclassified"] == 0
 
 
 def test_envelope_lists_as_of_per_source(client: TestClient) -> None:
@@ -138,3 +138,98 @@ def test_helpers() -> None:
     assert ops_monitor.aware(None) is None
     assert ops_monitor.age_seconds(None) is None
     assert ops_monitor.aware(datetime(2026, 1, 1)).tzinfo is not None
+
+
+# ---------------------------------------------------------------------------
+# Data origin and correlation IDs
+# ---------------------------------------------------------------------------
+
+
+def _session(db: Any, origin: Any, status: Any = None) -> Any:
+    from app.database.models import (
+        Battery,
+        Participant,
+        ParticipantSession,
+        ParticipantSessionStatus,
+        Study,
+    )
+
+    study = Study(name="s")
+    db.add(study)
+    db.commit()
+    battery = Battery(study_id=study.study_id, name="b", version="1", instrument_schema={})
+    part = Participant()
+    db.add_all([battery, part])
+    db.commit()
+    ps = ParticipantSession(
+        participant_id=part.participant_id,
+        study_id=study.study_id,
+        battery_id=battery.battery_id,
+        status=status or ParticipantSessionStatus.COMPLETED,
+        data_origin=origin,
+        correlation_id="corr-12345678",
+    )
+    db.add(ps)
+    db.commit()
+    return ps
+
+
+def test_origin_panel_counts_and_filters(client: TestClient, test_db_session: Any) -> None:
+    _session(test_db_session, "synthetic")
+    _session(test_db_session, "human_observed")
+    _session(test_db_session, None)
+    home = client.get("/v1/ops/home").json()["data"]
+    assert (
+        home["origin"]["synthetic"],
+        home["origin"]["human_observed"],
+        home["origin"]["unclassified"],
+    ) == (1, 1, 1)
+    only = client.get("/v1/ops/home", params={"origin": "synthetic"}).json()["data"]
+    assert only["quality"]["completion"]["total"] == 1
+    assert client.get("/v1/ops/home", params={"origin": "bogus"}).status_code == 422
+
+
+def test_catalog_origin_filter_and_detail(client: TestClient, test_db_session: Any) -> None:
+    ps = _session(test_db_session, "synthetic")
+    _session(test_db_session, None)
+    res = client.get("/v1/ops/catalog", params={"origin": "unclassified"}).json()["data"]
+    assert res["total"] == 1 and res["items"][0]["origin"] is None
+    detail = client.get(f"/v1/ops/catalog/session/{ps.participant_session_id}").json()["data"]
+    assert detail["origin"] == "synthetic" and detail["correlation_id"] == "corr-12345678"
+
+
+def test_classify_session_records_origin(client: TestClient, test_db_session: Any) -> None:
+    from types import SimpleNamespace
+
+    from app.services.authorization import get_current_user
+
+    client.app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(user_id="admin-1")  # type: ignore[attr-defined]
+    ps = _session(test_db_session, None)
+    with patch("app.routes.ops.log_audit_event") as audit:
+        r = client.post(
+            f"/v1/ops/sessions/{ps.participant_session_id}:classify", json={"origin": "synthetic"}
+        )
+    assert r.status_code == 200 and r.json()["data"]["previous"] is None
+    audit.assert_called_once()
+    test_db_session.refresh(ps)
+    assert ps.data_origin == "synthetic"
+    assert (
+        client.post("/v1/ops/sessions/x:classify", json={"origin": "synthetic"}).status_code == 404
+    )
+    assert (
+        client.post(
+            f"/v1/ops/sessions/{ps.participant_session_id}:classify", json={"origin": "maybe"}
+        ).status_code
+        == 422
+    )
+
+
+def test_correlation_id_minted_echoed_and_sanitised() -> None:
+    app = create_app(test_mode=True)
+    with TestClient(app) as c:
+        minted = c.get("/health/live").headers["X-APGI-Correlation-Id"]
+        assert len(minted) == 36
+        ok = c.get("/health/live", headers={"X-APGI-Correlation-Id": "trace-abcdef12"})
+        assert ok.headers["X-APGI-Correlation-Id"] == "trace-abcdef12"
+        bad = c.get("/health/live", headers={"X-APGI-Correlation-Id": 'x"; drop'})
+        assert bad.headers["X-APGI-Correlation-Id"] != 'x"; drop'

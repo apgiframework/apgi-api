@@ -7,6 +7,8 @@ the apgiframework/apgi-framework release they ship alongside.
 
 - Operations console at `/console` with a read-only `/v1/ops/*` API (home panels, catalog,
   failures with retry, per-source freshness). Unmeasurable values are `null`/unknown. See `docs/CONSOLE.md`.
+- `participant_sessions.data_origin` / `correlation_id` (migration `add_session_data_origin`),
+  `POST /v1/ops/sessions/{id}:classify`, and `X-APGI-Correlation-Id` middleware.
 - Server-side effort/fraud/validity screening (`app/services/screening.py`):
   fast responses, invariant responding, straight-lining/zig-zagging, failed
   attention checks, form-layer bot signals, and duplicate device-fingerprint /

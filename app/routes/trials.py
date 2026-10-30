@@ -22,7 +22,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -116,6 +116,7 @@ def _check_session_access(
 )
 async def create_participant_session(
     request: ParticipantSessionCreateRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: TokenPayload = Depends(get_current_user),
 ) -> ParticipantSession:
@@ -162,6 +163,8 @@ async def create_participant_session(
             hash_identifier(request.device_fingerprint) if request.device_fingerprint else None
         ),
         email_hash=email_hash_for(participant),
+        data_origin=request.data_origin,
+        correlation_id=getattr(http_request.state, "correlation_id", None),
     )
     db.add(session)
     form_order = get_or_assign_form_order(db, request.participant_id, request.study_id)
