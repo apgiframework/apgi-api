@@ -722,3 +722,21 @@ def test_scopes_are_separate_read_cannot_write_or_see_quality() -> None:
         assert c.post("/v1/ops/alerts/x:ack").status_code in (401, 403)
         assert c.get("/v1/ops/data-quality").status_code in (401, 403)
         assert c.get("/v1/ops/studies").status_code in (401, 403)
+
+
+def test_console_reads_join_the_signed_hash_chain(client: TestClient, test_db_session: Any) -> None:
+    """Console audit entries must chain like every other entry, or verify_chain() would flag them."""
+    from app.config import settings
+    from app.database.models import AuditLog
+    from app.services.audit_signing import verify_chain
+
+    ps = _session_for(test_db_session, "synthetic", None)
+    with patch.object(settings, "audit_signing_key", "k" * 40):
+        client.get("/v1/ops/failures")
+        client.get(
+            f"/v1/ops/catalog/session/{ps.participant_session_id}",
+            params={"purpose": "research_qa"},
+        )
+        rows = test_db_session.query(AuditLog).order_by(AuditLog.chain_seq).all()
+        assert [r.chain_seq for r in rows] == [1, 2]
+        assert verify_chain(rows) == (True, None)

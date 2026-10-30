@@ -515,9 +515,14 @@ def log_audit_event(
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
     status: str = "success",
+    strict: bool = False,
 ) -> None:
     """
     Log an audit event to the database.
+
+    By default a failure to write is logged and swallowed so it cannot break the
+    main flow. With ``strict=True`` the failure is re-raised (after rollback), so
+    callers that must not serve data unaudited can refuse the request.
 
     Args:
         db: Database session
@@ -529,6 +534,7 @@ def log_audit_event(
         ip_address: Client IP address for audit logging (optional)
         user_agent: Client user agent for audit logging (optional)
         status: Action outcome ('success', 'failure', etc.)
+        strict: Re-raise write failures instead of swallowing them
     """
     if db is None:
         return
@@ -592,6 +598,9 @@ def log_audit_event(
         db.commit()
     except Exception as e:
         logger.error("Failed to log audit event: %s", e)
+        if strict:
+            db.rollback()
+            raise
         # Don't raise exception to avoid breaking the main flow
 
 
