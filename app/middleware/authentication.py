@@ -82,6 +82,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         "/v1/consent-texts",
         "/v1/instruments/apgi-explorer-35",
         "/v1/instruments/apgi-explorer-35/score-allowlist",
+        "/v1/instruments/apgi-explorer-35/versions/1.0.0",
     }
 
     _redis_client = None

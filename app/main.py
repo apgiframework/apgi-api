@@ -65,6 +65,7 @@ from app.routes import (
     export,
     health,
     instrument,
+    instruments,
     longitudinal,
     meta,
     metrics,
@@ -423,6 +424,7 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
     app.include_router(nof1.router)
     app.include_router(acquisition.router)
     app.include_router(explorer.router)
+    app.include_router(instruments.router)
     app.include_router(updates.router)
     app.include_router(ops.router)
     app.include_router(console.router)

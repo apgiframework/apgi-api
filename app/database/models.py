@@ -10,9 +10,9 @@ from enum import Enum as PythonEnum
 from typing import Optional
 
 import sqlalchemy as sa
-from sqlalchemy import JSON, BigInteger, Boolean, Column, DateTime
+from sqlalchemy import DDL, JSON, BigInteger, Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import DDL, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -1583,7 +1583,7 @@ HOLDOUT_IMMUTABLE_SQLITE = DDL("""
     BEFORE UPDATE OF partition ON study_enrollments
     WHEN OLD.partition IS NOT NULL AND NEW.partition IS NOT OLD.partition
     BEGIN SELECT RAISE(ABORT, 'study_enrollments.partition is immutable once set'); END;
-    """)
+    """)  # type: ignore[no-untyped-call]
 sa.event.listen(
     StudyEnrollment.__table__, "after_create", HOLDOUT_IMMUTABLE_SQLITE.execute_if(dialect="sqlite")
 )
@@ -1612,7 +1612,7 @@ for _op in ("UPDATE", "DELETE"):
     sa.event.listen(
         ConsentRecord.__table__,
         "after_create",
-        DDL(
+        DDL(  # type: ignore[no-untyped-call]
             f"CREATE TRIGGER IF NOT EXISTS trg_consent_records_no_{_op.lower()} "
             f"BEFORE {_op} ON consent_records "
             "BEGIN SELECT RAISE(ABORT, 'consent_records is append-only'); END;"
