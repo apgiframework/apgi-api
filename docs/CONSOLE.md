@@ -164,7 +164,8 @@ data (`data-quality`, `studies`) needs `ops:quality`. `system:admin` alone (e.g.
 *Purpose-bound, audited reads.* A session record needs `purpose` (`operations_support` | `research_qa` |
 `security_investigation`); the console asks before opening one. Session reads, catalog searches (filters only, never the
 search text), failure-list reads and data-quality reads write signed audit entries with actor, purpose and scope. The audit
-write is **not** best-effort: if it fails the read returns 500 instead of being served unaudited.
+write is **not** best-effort: if it fails the read returns 500 instead of being served unaudited. Entries use the shared
+hash-chained writer (`log_audit_event(strict=True)`), so `verify_chain()` covers console reads too (tested).
 
 *Withdrawal.* Research-purpose views (data-quality and Home panel 4) exclude (a) erased participants and (b) any session
 that is not synthetic and lacks an active, current-version research-participation consent; unclassified sessions are not
@@ -178,7 +179,7 @@ every `/v1/ops` route; a read-only key cannot write or see quality data.
 - The plan's eight roles. Only admin/researcher/viewer exist; researchers get **no** console scope on purpose, because
   there is no study-ownership model, so granting `ops:quality` would let one researcher read every study.
 - Study-level row security (S2-CAT-01 RLS) and cross-study isolation tests; today access is all-or-nothing admin.
-- Exposure gates (`ExposureGate.emit()`) on console responses; responses are aggregates plus session IDs, but no gate runs.
+- Exposure gates: `ExposureGate` now exists (`app/modules/scoring/exposure.py`) but is not applied to console responses, which are aggregates plus session IDs.
 - Withdrawal during in-flight work (workers re-checking consent before upload, scoring, export): the job code is unchanged.
 - Aggregate-only operator endpoints (no session IDs) for a lesser operator role; small-cell suppression.
 - Purpose is declared by the user, not authorised against a grant; it is recorded, not enforced.
