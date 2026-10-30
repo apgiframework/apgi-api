@@ -253,6 +253,13 @@ class Settings:
             p.strip() for p in os.getenv("K7_CLEARED_PARAMETERS", "").split(",") if p.strip()
         }
 
+        # Signed update feed for the Appendix client (GET /updates.json). All three must
+        # be set or the endpoint answers 503; it never serves an unsigned document.
+        # The private key is a P-256 PEM and belongs in Secret Manager.
+        self.update_manifest_path: Optional[str] = os.getenv("UPDATE_MANIFEST_PATH")
+        self.update_signing_private_key: Optional[str] = os.getenv("UPDATE_SIGNING_PRIVATE_KEY")
+        self.update_signing_key_id: Optional[str] = os.getenv("UPDATE_SIGNING_KEY_ID")
+
         # Stripe Settings
         self.stripe_secret_key: str = os.getenv("STRIPE_SECRET_KEY", "sk_test_placeholder")
         self.stripe_publishable_key: str = os.getenv(
