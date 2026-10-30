@@ -309,6 +309,9 @@ class Settings:
             "data_sharing": os.getenv("CONSENT_VERSION_DATA_SHARING", "1.0"),
             "recontact": os.getenv("CONSENT_VERSION_RECONTACT", "1.0"),
         }
+        # Norm cells with fewer usable records than this are suppressed: the
+        # response carries the raw score only, never a percentile.
+        self.norms_min_cell_size: int = int(os.getenv("NORMS_MIN_CELL_SIZE", "200"))
         # Master switch for the Explorer research client. Off by default and
         # additionally requires every canonical consent text to be approved.
         self.explorer_research_enabled: bool = (

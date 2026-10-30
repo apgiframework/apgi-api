@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
@@ -91,3 +91,50 @@ async def get_dataset_card(db: Session = Depends(get_db)) -> DatasetCardResponse
         counts=counts,
         warnings=warnings,
     )
+
+
+_NOT_RECORDED = {"status": "not_recorded"}
+_CARD_FIELDS = (
+    "recruitment_channels",
+    "countries_and_languages",
+    "demographic_distributions",
+    "missingness_and_dropout",
+    "incentives",
+    "known_sampling_bias",
+    "convenience_vs_panel_comparison",
+    "diagnostic_instruments_excluded",
+)
+
+
+@router.get("/v1/reference-datasets/{version}/card")
+async def get_reference_dataset_card(version: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Immutable card for one released reference dataset version.
+
+    404 until identifiers.yaml records that version as released. Fields the
+    project has not yet recorded are reported as ``not_recorded`` rather than
+    omitted or invented.
+    """
+    ids = load_identifiers()
+    released = ids["release_state"].get("reference_dataset_version")
+    if released is None or str(released) != version:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail=f"No reference dataset version '{version}' has been released",
+        )
+    ethics = ids["ethics"]
+    card: dict[str, Any] = {
+        "reference_dataset_version": version,
+        "release_state": ids["release_state"],
+        "licence": ids["licences"]["reference_dataset"],
+        "ethics": ethics,
+        "task_and_feature_versions": {
+            "battery_version": ids["release_state"].get("battery_version"),
+            "feature_version": ids["release_state"].get("feature_version"),
+            "model_version": ids["release_state"].get("model_version"),
+        },
+        "inclusion_and_exclusion_rules": "see GET /v1/dataset-card exclusion counts",
+        "sample": "provisional reference sample, not a population norm",
+    }
+    for field in _CARD_FIELDS:
+        card[field] = dict(_NOT_RECORDED)
+    return card

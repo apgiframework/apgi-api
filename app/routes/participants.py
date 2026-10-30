@@ -16,12 +16,21 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
-from app.database.models import Consent, ConsentType, DataDeletion, Participant
+from app.database.models import (
+    Consent,
+    ConsentType,
+    DataDeletion,
+    ItemResponse,
+    Participant,
+    ParticipantSession,
+    TrialEvent,
+)
 from app.models.schemas import ErrorResponse, TokenPayload
 from app.schemas.research import (
     ConsentGrantRequest,
@@ -244,6 +253,116 @@ async def revoke_consent_route(
         resource_id=participant_id,
         details={"consent_type": request.consent_type.value},
     )
+
+
+@router.get(
+    "/{participant_id}/export",
+    summary="Portable export of everything held about a participant",
+    description="Machine-readable JSON of the participant's own data: profile, consent history, "
+    "sessions with scores, trial summaries and item responses. Raw Cloud Storage objects are "
+    "not inlined.",
+)
+async def export_participant(
+    participant_id: str,
+    db: Session = Depends(get_db),
+    current_user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    set_rls_context(db, current_user)
+    participant = _get_participant_or_404(db, participant_id)
+    _check_participant_access(participant, current_user)
+
+    def iso(value: Any) -> Optional[str]:
+        return value.isoformat() if value is not None else None
+
+    demographics = participant.encrypted_demographics
+    consents = (
+        db.query(Consent)
+        .filter(Consent.participant_id == participant_id)
+        .order_by(Consent.granted_at)
+        .all()
+    )
+    sessions = (
+        db.query(ParticipantSession)
+        .filter(ParticipantSession.participant_id == participant_id)
+        .order_by(ParticipantSession.session_index)
+        .all()
+    )
+    session_ids = [s.participant_session_id for s in sessions]
+    trials = (
+        db.query(TrialEvent)
+        .filter(TrialEvent.participant_session_id.in_(session_ids))
+        .order_by(TrialEvent.participant_session_id, TrialEvent.trial_index)
+        .all()
+        if session_ids
+        else []
+    )
+    items = (
+        db.query(ItemResponse).filter(ItemResponse.participant_session_id.in_(session_ids)).all()
+        if session_ids
+        else []
+    )
+
+    log_audit_event(
+        db=db,
+        user_id=current_user.user_id,
+        action="participant:export",
+        resource_type="participant",
+        resource_id=participant_id,
+    )
+    return {
+        "participant": {
+            "participant_id": participant_id,
+            "external_ref": participant.external_ref,
+            "contact_email": participant.encrypted_contact_email,
+            "demographics": json.loads(demographics) if demographics else None,
+            "created_at": iso(participant.created_at),
+        },
+        "consents": [
+            {
+                "consent_type": c.consent_type.value,
+                "version": c.version,
+                "consent_text_hash": c.consent_text_hash,
+                "granted_at": iso(c.granted_at),
+                "revoked_at": iso(c.revoked_at),
+            }
+            for c in consents
+        ],
+        "sessions": [
+            {
+                "participant_session_id": s.participant_session_id,
+                "study_id": s.study_id,
+                "battery_id": s.battery_id,
+                "session_index": s.session_index,
+                "status": s.status.value,
+                "scores": s.scores,
+                "started_at": iso(s.started_at),
+                "completed_at": iso(s.completed_at),
+            }
+            for s in sessions
+        ],
+        "trial_events": [
+            {
+                "participant_session_id": t.participant_session_id,
+                "task_type": t.task_type,
+                "trial_index": t.trial_index,
+                "response_value": t.response_value,
+                "rt_ms": t.rt_ms,
+                "correct": t.correct,
+                "event_id": t.event_id,
+            }
+            for t in trials
+        ],
+        "item_responses": [
+            {
+                "participant_session_id": i.participant_session_id,
+                "instrument_id": i.instrument_id,
+                "instrument_version": i.instrument_version,
+                "item_id": i.item_id,
+                "value": i.response_value,
+            }
+            for i in items
+        ],
+    }
 
 
 @router.get(

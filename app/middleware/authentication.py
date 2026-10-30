@@ -6,6 +6,7 @@ Middleware to extract and verify JWT tokens from Authorization headers.
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Optional
@@ -84,6 +85,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         "/v1/instruments/apgi-explorer-35/score-allowlist",
         "/v1/instruments/apgi-explorer-35/versions/1.0.0",
     }
+
+    # Versioned reference-dataset cards are public, like /v1/dataset-card.
+    _PUBLIC_CARD_PATH = re.compile(r"/v1/reference-datasets/[A-Za-z0-9._-]+/card")
 
     _redis_client = None
 
@@ -167,6 +171,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         """
         # Check exact matches only to prevent authentication bypass via path prefixes
         if path in self.PUBLIC_PATHS:
+            return True
+        if self._PUBLIC_CARD_PATH.fullmatch(path):
             return True
 
         return False

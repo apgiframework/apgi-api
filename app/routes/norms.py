@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database.connection import get_db
 from app.database.models import Battery, ParticipantSession, ParticipantSessionStatus
 from app.models.schemas import ErrorResponse, TokenPayload
@@ -80,10 +81,26 @@ async def get_norms(
             detail=f"No scored sessions found for battery {battery_id}, task {task_type}",
         )
 
+    release_state = current_release_state()
+    min_cell = settings.norms_min_cell_size
+    if len(sample) < min_cell:
+        return NormsResponse(
+            study_id=study_id,
+            battery_id=battery_id,
+            task_type=task_type,
+            metric=metric,
+            score=score,
+            n=len(sample),
+            release_state=release_state,
+            suppressed=True,
+            suppression_reason=f"fewer than {min_cell} usable records in this reference cell",
+            min_cell_size=min_cell,
+            note="Raw value only: no percentile is reported below the minimum cell size.",
+        )
+
     rank = percentile_rank(sample, score)
     ci_lower, ci_upper = bootstrap_percentile_ci(sample, score)
 
-    release_state = current_release_state()
     note = None
     if release_state != "calibrated":
         note = (

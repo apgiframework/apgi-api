@@ -14,11 +14,14 @@ class NormsResponse(BaseModel):
     metric: str
     score: float
     n: int
-    percentile: float
-    percentile_ci_lower: float
-    percentile_ci_upper: float
+    percentile: Optional[float] = None
+    percentile_ci_lower: Optional[float] = None
+    percentile_ci_upper: Optional[float] = None
     release_state: str
     note: Optional[str] = None
+    suppressed: bool = False
+    suppression_reason: Optional[str] = None
+    min_cell_size: Optional[int] = None
 
 
 class PsychometricsResponse(BaseModel):

@@ -18,18 +18,22 @@ summary scores. Two things distinguish this from a plain groupby-and-average:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import statistics
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database.models import (
     Battery,
     ModelVersion,
     ParticipantSession,
     TrialEvent,
 )
+from app.services.authorization import log_audit_event
 from app.services.version_lattice import build_stamps, validate_stamps
 
 logger = logging.getLogger(__name__)
@@ -48,6 +52,27 @@ def _task_summary(trials: list[TrialEvent]) -> dict[str, Any]:
         if len(rts) > 1:
             summary["sd_rt_ms"] = round(statistics.stdev(rts), 2)  # type: ignore[type-var]
     return summary
+
+
+def _sha256_json(value: Any) -> str:
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _input_sha256(db: Session, participant_session_id: str) -> str:
+    """Hash of exactly the trial events the score was computed from."""
+    trials = (
+        db.query(TrialEvent)
+        .filter(TrialEvent.participant_session_id == participant_session_id)
+        .order_by(TrialEvent.task_type, TrialEvent.trial_index)
+        .all()
+    )
+    return _sha256_json(
+        [
+            [t.task_type, t.trial_index, t.response_value, t.rt_ms, t.correct, t.payload_sha256]
+            for t in trials
+        ]
+    )
 
 
 def compute_session_scores(db: Session, participant_session: ParticipantSession) -> dict[str, Any]:
@@ -115,6 +140,21 @@ def score_session(db: Session, participant_session_id: str) -> Optional[Particip
     participant_session.scores = scores  # type: ignore[assignment]
     if active_model is not None:
         participant_session.model_version_id = active_model.model_version_id
+    # The audit write commits the score with it, so a score never exists
+    # without its chained record: with signing configured, a failed audit
+    # write rolls the score back (strict) instead of serving it unaudited.
+    log_audit_event(
+        db=db,
+        action="score.generate",
+        resource_type="participant_session",
+        resource_id=participant_session_id,
+        details={
+            "input_sha256": _input_sha256(db, participant_session_id),
+            "output_sha256": _sha256_json(scores),
+            "stamps": scores["stamps"],
+        },
+        strict=bool(settings.audit_signing_key),
+    )
     db.commit()
     db.refresh(participant_session)
     return participant_session

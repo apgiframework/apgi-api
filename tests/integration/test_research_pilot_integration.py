@@ -439,3 +439,24 @@ class TestConsentCompletion:
             json={"participant_id": pid, "study_id": study_id, "battery_id": battery_id},
         )
         assert resp.status_code == 201, resp.text
+
+
+class TestParticipantExport:
+    def test_owner_exports_own_data_and_other_user_cannot(
+        self, participant_client: TestClient, researcher_client: TestClient
+    ) -> None:
+        pid = participant_client.post(
+            "/v1/participants", json={"contact_email": "p@example.org"}
+        ).json()["participant_id"]
+        participant_client.post(
+            f"/v1/participants/{pid}/consents", json={"consent_type": "product_use"}
+        )
+        body = participant_client.get(f"/v1/participants/{pid}/export").json()
+        assert body["participant"]["contact_email"] == "p@example.org"
+        assert [c["consent_type"] for c in body["consents"]] == ["product_use"]
+        assert body["sessions"] == [] and body["item_responses"] == []
+
+    def test_erased_participant_has_nothing_to_export(self, participant_client: TestClient) -> None:
+        pid = participant_client.post("/v1/participants", json={}).json()["participant_id"]
+        participant_client.delete(f"/v1/participants/{pid}")
+        assert participant_client.get(f"/v1/participants/{pid}/export").status_code == 404

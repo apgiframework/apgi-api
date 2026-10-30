@@ -194,7 +194,13 @@ class TestNormsAndPsychometrics:
         )
         assert resp.status_code == 404
 
-    def test_norms_and_psychometrics_after_multiple_sessions(self, db_engine: Any) -> None:
+    def test_norms_and_psychometrics_after_multiple_sessions(
+        self, db_engine: Any, monkeypatch: Any
+    ) -> None:
+        from app.routes import norms
+
+        # Patch the instance the route actually reads (immune to config reloads).
+        monkeypatch.setattr(norms.settings, "norms_min_cell_size", 1)
         researcher = _client(db_engine, ["researcher"], "researcher-1")
         study_id = researcher.post("/v1/studies", json={"name": "Norms Study 2"}).json()["study_id"]
         battery_id = researcher.post(
@@ -265,3 +271,54 @@ class TestMetaAndDatasetCard:
         body = resp.json()
         assert any("Privacy review" in w for w in body["warnings"])
         assert body["counts"]["studies"] == 0
+
+
+class TestNormsSuppression:
+    def test_small_cell_returns_raw_value_only(self, db_engine: Any) -> None:
+        researcher = _client(db_engine, ["researcher"], "researcher-1")
+        study_id = researcher.post("/v1/studies", json={"name": "Sup"}).json()["study_id"]
+        battery_id = researcher.post(
+            "/v1/batteries",
+            json={"study_id": study_id, "name": "B", "version": "1.0", "form_label": "A"},
+        ).json()["battery_id"]
+        participant = _client(db_engine, ["viewer"], "participant-0")
+        _run_one_session(researcher, participant, study_id, battery_id, [True, False], db_engine)
+
+        body = researcher.get(
+            "/v1/norms",
+            params={
+                "study_id": study_id,
+                "battery_id": battery_id,
+                "task_type": "stroop",
+                "metric": "accuracy",
+                "score": 0.5,
+            },
+        ).json()
+        assert body["suppressed"] is True
+        assert body["min_cell_size"] == 200
+        assert body["score"] == 0.5 and body["n"] == 1
+        assert body["percentile"] is None and body["percentile_ci_lower"] is None
+
+
+class TestReferenceDatasetCard:
+    def test_unreleased_version_is_404_and_public(self, db_engine: Any) -> None:
+        app = create_app(test_mode=False)
+        app.dependency_overrides[get_db] = _override_get_db(db_engine)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/v1/reference-datasets/0.1/card")
+        assert resp.status_code == 404
+
+    def test_released_version_serves_card_with_unrecorded_fields(
+        self, db_engine: Any, monkeypatch: Any
+    ) -> None:
+        from app.routes import meta
+
+        real = meta.load_identifiers()
+        patched = {
+            **real,
+            "release_state": {**real["release_state"], "reference_dataset_version": "0.1"},
+        }
+        monkeypatch.setattr(meta, "load_identifiers", lambda: patched)
+        body = _client(db_engine, [], "anon").get("/v1/reference-datasets/0.1/card").json()
+        assert body["reference_dataset_version"] == "0.1"
+        assert body["incentives"] == {"status": "not_recorded"}

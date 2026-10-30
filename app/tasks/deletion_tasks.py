@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from celery import shared_task
 from sqlalchemy.orm import Session
@@ -124,7 +124,7 @@ def _record_deletion_outcome(
     db: Session,
     participant_id: str,
     status: str,
-    stores: Optional[dict] = None,
+    stores: Optional[dict[str, Any]] = None,
     error: bool = False,
 ) -> None:
     """Close the newest open data_deletions row; the ledger outlives the participant."""
