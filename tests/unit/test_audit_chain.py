@@ -71,6 +71,7 @@ def test_score_session_writes_verifiable_chained_record_and_tamper_fails(monkeyp
     participant, study = Participant(), Study(name="s")
     db.add_all([participant, study])
     db.commit()
+    _grant_consent(db, participant)
     battery = Battery(study_id=study.study_id, name="b", version="1.0", form_label="A")
     db.add(battery)
     db.commit()
@@ -124,6 +125,21 @@ def test_verify_audit_chain_cli(db, monkeypatch):
     assert result.exit_code == 1
 
 
+def _grant_consent(db, participant):
+    from app.config import settings
+    from app.database.models import Consent, ConsentType
+
+    db.add(
+        Consent(
+            participant_id=participant.participant_id,
+            consent_type=ConsentType.RESEARCH_PARTICIPATION,
+            version=settings.consent_current_versions[ConsentType.RESEARCH_PARTICIPATION.value],
+            consent_text_hash="0" * 64,
+        )
+    )
+    db.commit()
+
+
 def _scored_session_db():
     from app.database.models import Battery, Participant, Study
 
@@ -133,6 +149,7 @@ def _scored_session_db():
     participant, study = Participant(), Study(name="s")
     db.add_all([participant, study])
     db.commit()
+    _grant_consent(db, participant)
     battery = Battery(study_id=study.study_id, name="b", version="1.0", form_label="A")
     db.add(battery)
     db.commit()

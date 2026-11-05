@@ -122,9 +122,36 @@ def test_clearance_is_scoped_to_the_paradigm_where_recovery_was_shown():
     table = _cleared_table()
     _validate_clearances(table["latent_parameters"])
     gate = ExposureGate(table)
-    assert gate.is_cleared("precision_exteroceptive", task_design="oddball-v1")
-    assert not gate.is_cleared("precision_exteroceptive", task_design="other-task")
-    assert not gate.is_cleared("somatic_bias")
+    full = {
+        "model": "apgi",
+        "model_version": "1.0",
+        "observation_model": "gaussian",
+        "task_design": "oddball-v1",
+        "population": "adult-online",
+    }
+    assert gate.is_cleared("precision_exteroceptive", **full)
+    assert not gate.is_cleared("precision_exteroceptive", **{**full, "task_design": "other-task"})
+    assert not gate.is_cleared("somatic_bias", **full)
+
+
+def test_incomplete_or_absent_context_is_never_cleared():
+    """NEW-03: an empty/partial context must not vacuously match the evidence scope."""
+    table = _cleared_table()
+    table["outbound_allow_list"] = [
+        "session_id",
+        "identifiability_gate",
+        "gate_table_version",
+        "_gate_table_version",
+        "parameter",
+        "status",
+        "exposed",
+        "reason",
+    ]
+    gate = ExposureGate(table)
+    assert not gate.is_cleared("precision_exteroceptive")
+    assert not gate.is_cleared("precision_exteroceptive", task_design="oddball-v1")
+    state = gate.gate_state("s1", "precision_exteroceptive")
+    assert state.identifiability_gate[0].exposed is False
 
 
 def test_clearance_without_evidence_or_scope_fails_closed_at_load():

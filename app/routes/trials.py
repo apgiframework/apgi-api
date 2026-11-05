@@ -51,6 +51,7 @@ from app.schemas.research import (
 )
 from app.services.authorization import Role, get_current_user, has_any_role, log_audit_event
 from app.services.consent import require_any_consent
+from app.services.task_grading import grade_trial
 from app.services.rls import set_rls_context
 from app.services.screening import (
     TIER_CONFIG,
@@ -325,7 +326,8 @@ async def ingest_trial_events(
             trial_index=event.trial_index,
             response_value=event.response_value,
             rt_ms=event.rt_ms,
-            correct=event.correct,
+            # Server-graded only: the client's `correct` claim is ignored.
+            correct=grade_trial(event.task_type, event.response_value),
             raw_gcs_object=raw_gcs_object,
         )
         db.add(trial)

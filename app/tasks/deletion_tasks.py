@@ -41,6 +41,10 @@ from app.database.models import DataDeletion, Participant, ParticipantSession, T
 logger = logging.getLogger(__name__)
 
 
+class ErasureIncompleteError(RuntimeError):
+    """An external store still holds data for the participant; do not mark completed."""
+
+
 def _delete_raw_trial_events_from_gcs(participant_id: str, db: Session) -> int:
     if not settings.trial_events_bucket:
         return 0
@@ -64,60 +68,73 @@ def _delete_raw_trial_events_from_gcs(participant_id: str, db: Session) -> int:
         return 0
 
     deleted = 0
-    try:
-        import google.cloud.storage as storage
+    failed: list[str] = []
+    import google.cloud.storage as storage
 
-        client = storage.Client(project=settings.gcp_project_id)
-        bucket = client.bucket(settings.trial_events_bucket)
-        for object_path in object_paths:
-            try:
-                bucket.blob(object_path).delete()
+    client = storage.Client(project=settings.gcp_project_id)
+    bucket = client.bucket(settings.trial_events_bucket)
+    for object_path in object_paths:
+        try:
+            bucket.blob(object_path).delete()
+            deleted += 1
+        except Exception as exc:
+            # Already-absent objects count as deleted; anything else is a failure.
+            if exc.__class__.__name__ == "NotFound":
                 deleted += 1
-            except Exception:
-                logger.error(
-                    "Failed to delete raw trial event object",
-                    exc_info=True,
-                    extra={"participant_id": participant_id, "object_path": object_path},
-                )
-    except Exception:
-        logger.error(
-            "Failed to initialize Cloud Storage client for erasure",
-            exc_info=True,
-            extra={"participant_id": participant_id},
+                continue
+            failed.append(object_path)
+            logger.error(
+                "Failed to delete raw trial event object",
+                exc_info=True,
+                extra={"participant_id": participant_id, "object_path": object_path},
+            )
+    if failed:
+        raise ErasureIncompleteError(
+            f"{len(failed)} raw trial event object(s) could not be deleted from Cloud Storage"
         )
     return deleted
 
 
-def _delete_from_bigquery(participant_id: str) -> None:
+def _delete_from_bigquery(participant_id: str) -> str:
+    """Delete the participant's exported rows; returns the store outcome.
+
+    Exported rows are keyed by the pseudonymous ``subject_key`` (see
+    bigquery_export._row_for_session), never by ``participant_id`` -- the
+    DELETE must use the same key or it silently matches nothing. Any failure
+    other than the table not existing yet propagates so completion is never
+    recorded for an erasure that did not verifiably happen.
+    """
     if not settings.bigquery_deidentified_dataset:
-        return
+        return "not_configured"
 
+    from google.cloud import bigquery
+
+    from app.services.bigquery_export import pseudonymous_subject_key
+
+    client = bigquery.Client(project=settings.gcp_project_id)
+    # nosec: B608 — the interpolated pieces are the trusted project ID and
+    # dataset name from server config (BigQuery has no bind-parameter
+    # syntax for table identifiers), not user input; the actual data
+    # value (subject_key) is passed as a real query parameter below.
+    query = f"""
+        DELETE FROM `{settings.gcp_project_id}.{settings.bigquery_deidentified_dataset}.participant_scores`
+        WHERE subject_key = @subject_key
+    """  # nosec: B608
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter(
+                "subject_key", "STRING", pseudonymous_subject_key(participant_id)
+            )
+        ]
+    )
     try:
-        from google.cloud import bigquery
-
-        client = bigquery.Client(project=settings.gcp_project_id)
-        # nosec: B608 — the interpolated pieces are the trusted project ID and
-        # dataset name from server config (BigQuery has no bind-parameter
-        # syntax for table identifiers), not user input; the actual data
-        # value (participant_id) is passed as a real query parameter below.
-        query = f"""
-            DELETE FROM `{settings.gcp_project_id}.{settings.bigquery_deidentified_dataset}.participant_scores`
-            WHERE participant_id = @participant_id
-        """  # nosec: B608
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter("participant_id", "STRING", participant_id)
-            ]
-        )
         client.query(query, job_config=job_config).result()
-    except Exception:
-        # Includes the table not existing yet, which is expected before
-        # Phase 3-4's BigQuery export path is deployed.
-        logger.error(
-            "Failed to delete de-identified BigQuery rows during erasure",
-            exc_info=True,
-            extra={"participant_id": participant_id},
-        )
+    except Exception as exc:
+        if exc.__class__.__name__ == "NotFound":
+            # The export table was never created, so no rows can exist.
+            return "no_table"
+        raise
+    return "deleted"
 
 
 def _record_deletion_outcome(
@@ -155,8 +172,12 @@ async def _erase_participant_data(participant_id: str) -> None:
     db = SessionLocal()
     try:
         gcs_deleted = _delete_raw_trial_events_from_gcs(participant_id, db)
-        _delete_from_bigquery(participant_id)
-        stores = {"gcs_objects_deleted": gcs_deleted, "bigquery": "deleted", "sql": "deleted"}
+        bigquery_outcome = _delete_from_bigquery(participant_id)
+        stores = {
+            "gcs_objects_deleted": gcs_deleted,
+            "bigquery": bigquery_outcome,
+            "sql": "deleted",
+        }
 
         participant = (
             db.query(Participant).filter(Participant.participant_id == participant_id).first()

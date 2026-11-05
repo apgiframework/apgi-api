@@ -162,3 +162,16 @@ def require_any_consent(
         status_code=status.HTTP_403_FORBIDDEN,
         detail=f"Missing or outdated consent: one of {', '.join(ct.value for ct in consent_types)}",
     )
+
+
+def consent_permits(
+    db: Session,
+    participant_id: str,
+    *consent_types: ConsentType,
+    require_current_version: bool = True,
+) -> bool:
+    """Non-raising counterpart of require_any_consent, for queued/background work
+    that must re-check consent at execution time rather than at enqueue time."""
+    return any(
+        has_active_consent(db, participant_id, ct, require_current_version) for ct in consent_types
+    )

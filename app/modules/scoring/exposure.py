@@ -102,26 +102,47 @@ class ExposureGate:
     def is_cleared(self, parameter: str, **context: str) -> bool:
         """True only if `parameter` is cleared AND every scope field in `context`
         (model, model_version, observation_model, task_design, population) equals
-        the paradigm in which recovery was shown. Unknown parameters are not cleared."""
+        the paradigm in which recovery was shown. Unknown parameters are not cleared.
+
+        The context must name EVERY scope field: an absent or partial context is
+        never cleared (an empty context cannot vacuously match any scope)."""
         entry = self.table["latent_parameters"].get(parameter)
         if not entry or entry.get("status") != "cleared":
             return False
+        if any(not context.get(field) for field in SCOPE_FIELDS):
+            return False
         scope = (entry.get("evidence") or {}).get("scope") or {}
-        return all(scope.get(key) == value for key, value in context.items())
+        return all(scope.get(field) == context[field] for field in SCOPE_FIELDS)
 
-    def gate_state(self, session_id: str, *parameters: str) -> GateStateResponse:
-        """Gate state for `parameters` (all latent parameters if none given). Never values."""
+    def gate_state(
+        self,
+        session_id: str,
+        *parameters: str,
+        context: Dict[str, str] | None = None,
+    ) -> GateStateResponse:
+        """Gate state for `parameters` (all latent parameters if none given). Never values.
+
+        A parameter is `exposed` only when its clearance evidence scope matches the
+        complete `context` (model, model_version, observation_model, task_design,
+        population); a table-level 'cleared' status alone is not enough."""
         latent = self.table["latent_parameters"]
+        ctx = context or {}
         states = []
         for name in parameters or tuple(latent):
             entry = latent[name]
-            exposed = entry.get("status") == "cleared" and bool(entry.get("evidence"))
+            exposed = self.is_cleared(name, **ctx)
+            if exposed:
+                reason = ""
+            elif entry.get("status") == "cleared" and bool(entry.get("evidence")):
+                reason = "Clearance does not cover this session's complete evidence scope"
+            else:
+                reason = "No identifiability evidence record in gate table"
             states.append(
                 GateParameterState(
                     parameter=name,
                     status="cleared" if exposed else "withheld",
                     exposed=exposed,
-                    reason="" if exposed else "No identifiability evidence record in gate table",
+                    reason=reason,
                 )
             )
         response = GateStateResponse(

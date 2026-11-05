@@ -1319,9 +1319,16 @@
             "title": "Duration Ms"
           },
           "ignition_occurred": {
-            "description": "Whether ignition has occurred",
-            "title": "Ignition Occurred",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether ignition has occurred (ignition_state gate)",
+            "title": "Ignition Occurred"
           },
           "threshold": {
             "anyOf": [
@@ -1336,15 +1343,18 @@
             "title": "Threshold"
           },
           "total_signal": {
-            "description": "Total ignition signal",
-            "title": "Total Signal",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Total ignition signal S_t (ignition_state gate)",
+            "title": "Total Signal"
           }
         },
-        "required": [
-          "ignition_occurred",
-          "total_signal"
-        ],
         "title": "IgnitionState",
         "type": "object"
       },
