@@ -78,9 +78,15 @@ def compute_longitudinal_metrics(measurements: Sequence[Sequence[float]]) -> Lon
 
 def classify_change(delta: float, mdc95: float) -> str:
     """MDC-gated change classification: a raw delta is only reported as a
-    real change once it clears MDC95 — otherwise it's within measurement
+    real change once it *exceeds* MDC95 — otherwise it's within measurement
     noise and must not be presented as a change (Phase 5's MDC-gated
-    subscription change-reporting requirement)."""
-    if abs(delta) < mdc95:
+    subscription change-reporting requirement).
+
+    Degenerate inputs are never reliable change: a zero, negative, NaN or
+    infinite MDC means the noise floor is unknown, and a zero or NaN delta
+    is no change at all. Equality with MDC is not "exceeds"."""
+    if not (math.isfinite(delta) and math.isfinite(mdc95)) or mdc95 <= 0 or delta == 0:
+        return "no_reliable_change"
+    if abs(delta) <= mdc95:
         return "no_reliable_change"
     return "reliable_increase" if delta > 0 else "reliable_decrease"

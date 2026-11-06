@@ -122,8 +122,18 @@ def test_clearance_is_scoped_to_the_paradigm_where_recovery_was_shown():
     table = _cleared_table()
     _validate_clearances(table["latent_parameters"])
     gate = ExposureGate(table)
-    assert gate.is_cleared("precision_exteroceptive", task_design="oddball-v1")
-    assert not gate.is_cleared("precision_exteroceptive", task_design="other-task")
+    full = {
+        "model": "apgi",
+        "model_version": "1.0",
+        "observation_model": "gaussian",
+        "task_design": "oddball-v1",
+        "population": "adult-online",
+    }
+    assert gate.is_cleared("precision_exteroceptive", **full)
+    assert not gate.is_cleared("precision_exteroceptive", **{**full, "task_design": "other-task"})
+    # Partial context (the DEF-04 bypass) is never enough.
+    assert not gate.is_cleared("precision_exteroceptive", task_design="oddball-v1")
+    assert not gate.is_cleared("precision_exteroceptive")
     assert not gate.is_cleared("somatic_bias")
 
 

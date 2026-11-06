@@ -7,6 +7,7 @@ not allow-listed, so a new field cannot leak by omission.
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
@@ -63,17 +64,27 @@ EVIDENCE_FIELDS = ("validation_id", "dataset_sha256", "reviewer")
 SCOPE_FIELDS = ("model", "model_version", "observation_model", "task_design", "population")
 
 
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _validate_entry(name: str, entry: Dict[str, Any]) -> None:
+    evidence = entry.get("evidence") or {}
+    missing = [f for f in EVIDENCE_FIELDS if not evidence.get(f)]
+    scope = evidence.get("scope") or {}
+    missing += [f"scope.{f}" for f in SCOPE_FIELDS if not scope.get(f)]
+    if missing:
+        raise GateTableError(f"Clearance for {name!r} is missing {missing}")
+    # Evidence must be well-formed, not merely non-empty. (Resolving the
+    # validation run and dataset bytes needs the validation registry — S4.)
+    if not _SHA256_RE.match(str(evidence["dataset_sha256"])):
+        raise GateTableError(f"Clearance for {name!r} has a malformed dataset_sha256")
+
+
 def _validate_clearances(latent: Dict[str, Any]) -> None:
     """Fail closed at start-up on any 'cleared' entry lacking evidence or scope."""
     for name, entry in latent.items():
-        if entry.get("status") != "cleared":
-            continue
-        evidence = entry.get("evidence") or {}
-        missing = [f for f in EVIDENCE_FIELDS if not evidence.get(f)]
-        scope = evidence.get("scope") or {}
-        missing += [f"scope.{f}" for f in SCOPE_FIELDS if not scope.get(f)]
-        if missing:
-            raise GateTableError(f"Clearance for {name!r} is missing {missing}")
+        if entry.get("status") == "cleared":
+            _validate_entry(name, entry)
 
 
 class ExposureGate:
@@ -100,28 +111,46 @@ class ExposureGate:
                 self._walk(item)
 
     def is_cleared(self, parameter: str, **context: str) -> bool:
-        """True only if `parameter` is cleared AND every scope field in `context`
-        (model, model_version, observation_model, task_design, population) equals
-        the paradigm in which recovery was shown. Unknown parameters are not cleared."""
+        """True only if `parameter` is cleared with complete evidence AND the caller
+        supplies *all five* scope fields (model, model_version, observation_model,
+        task_design, population), each equal to the paradigm in which recovery was
+        shown. Missing, extra or mismatched context is never cleared, and unknown
+        parameters are not cleared."""
         entry = self.table["latent_parameters"].get(parameter)
         if not entry or entry.get("status") != "cleared":
             return False
-        scope = (entry.get("evidence") or {}).get("scope") or {}
+        if set(context) != set(SCOPE_FIELDS) or not all(context.values()):
+            return False
+        try:
+            _validate_entry(parameter, entry)
+        except GateTableError:
+            return False
+        scope = entry["evidence"]["scope"]
         return all(scope.get(key) == value for key, value in context.items())
 
-    def gate_state(self, session_id: str, *parameters: str) -> GateStateResponse:
-        """Gate state for `parameters` (all latent parameters if none given). Never values."""
+    def gate_state(
+        self, session_id: str, *parameters: str, context: Dict[str, str] | None = None
+    ) -> GateStateResponse:
+        """Gate state for `parameters` (all latent parameters if none given). Never values.
+
+        A parameter is exposed only when `context` carries the full paradigm scope
+        and it matches the recorded clearance; without context everything is withheld."""
         latent = self.table["latent_parameters"]
         states = []
         for name in parameters or tuple(latent):
-            entry = latent[name]
-            exposed = entry.get("status") == "cleared" and bool(entry.get("evidence"))
+            exposed = self.is_cleared(name, **(context or {}))
+            if exposed:
+                reason = ""
+            elif context is None or set(context) != set(SCOPE_FIELDS):
+                reason = "Full paradigm scope context is required to clear a parameter"
+            else:
+                reason = "No identifiability evidence record matching this paradigm"
             states.append(
                 GateParameterState(
                     parameter=name,
                     status="cleared" if exposed else "withheld",
                     exposed=exposed,
-                    reason="" if exposed else "No identifiability evidence record in gate table",
+                    reason=reason,
                 )
             )
         response = GateStateResponse(
