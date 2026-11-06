@@ -71,6 +71,10 @@ def test_score_session_writes_verifiable_chained_record_and_tamper_fails(monkeyp
     participant, study = Participant(), Study(name="s")
     db.add_all([participant, study])
     db.commit()
+    from app.database.models import ConsentType
+    from app.services.consent import record_consent
+
+    record_consent(db, participant.participant_id, ConsentType.PRODUCT_USE, "consent text")
     battery = Battery(study_id=study.study_id, name="b", version="1.0", form_label="A")
     db.add(battery)
     db.commit()
@@ -133,6 +137,10 @@ def _scored_session_db():
     participant, study = Participant(), Study(name="s")
     db.add_all([participant, study])
     db.commit()
+    from app.database.models import ConsentType
+    from app.services.consent import record_consent
+
+    record_consent(db, participant.participant_id, ConsentType.PRODUCT_USE, "consent text")
     battery = Battery(study_id=study.study_id, name="b", version="1.0", form_label="A")
     db.add(battery)
     db.commit()
@@ -261,3 +269,44 @@ def test_sequence_gap_is_detected(db):
     db.delete(_rows(db)[0])
     db.commit()
     assert verify_chain(_rows(db))[0] is False
+
+
+def test_scoring_is_refused_when_consent_was_never_granted_or_since_withdrawn():
+    import pytest
+
+    from app.database.models import ConsentType, ParticipantSession
+    from app.services.consent import ConsentWithdrawnError, revoke_consent
+    from app.services.scoring import score_session
+
+    db, participant, study, battery = _scored_session_db()
+    session = ParticipantSession(
+        participant_id=participant.participant_id,
+        study_id=study.study_id,
+        battery_id=battery.battery_id,
+    )
+    db.add(session)
+    db.commit()
+    revoke_consent(
+        db, participant.participant_id, ConsentType.PRODUCT_USE
+    )  # withdrawn after ingestion
+    with pytest.raises(ConsentWithdrawnError):
+        score_session(db, session.participant_session_id)
+    assert db.query(AuditLog).count() == 0  # nothing scored, nothing audited as scored
+
+
+def test_research_export_requires_active_research_consent(monkeypatch):
+    from app.config import settings
+    from app.database.models import ConsentType, ParticipantSession
+    from app.services import bigquery_export
+
+    db, participant, study, battery = _scored_session_db()  # product-use consent only
+    session = ParticipantSession(
+        participant_id=participant.participant_id,
+        study_id=study.study_id,
+        battery_id=battery.battery_id,
+        scores={"tasks": {}},
+    )
+    db.add(session)
+    db.commit()
+    monkeypatch.setattr(settings, "bigquery_deidentified_dataset", "ds", raising=False)
+    assert bigquery_export.export_session(db, session.participant_session_id) is False

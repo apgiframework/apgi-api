@@ -162,3 +162,22 @@ def require_any_consent(
         status_code=status.HTTP_403_FORBIDDEN,
         detail=f"Missing or outdated consent: one of {', '.join(ct.value for ct in consent_types)}",
     )
+
+
+class ConsentWithdrawnError(RuntimeError):
+    """Processing was attempted without a currently-active, current-version grant."""
+
+
+def ensure_processing_consent(
+    db: Session, participant_id: str, *consent_types: ConsentType, require_all: bool = False
+) -> None:
+    """Re-check consent at execution time (worker / export), outside any HTTP
+    request. Raises ConsentWithdrawnError rather than HTTPException so callers
+    in Celery tasks can stop without retrying. Consent granted at ingestion is
+    not a standing authorisation: withdrawal or deletion since then must stop
+    processing."""
+    check = all if require_all else any
+    if not check(has_active_consent(db, participant_id, ct) for ct in consent_types):
+        raise ConsentWithdrawnError(
+            "Participant has no active consent for: " + ", ".join(ct.value for ct in consent_types)
+        )

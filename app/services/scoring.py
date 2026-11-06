@@ -29,11 +29,13 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database.models import (
     Battery,
+    ConsentType,
     ModelVersion,
     ParticipantSession,
     TrialEvent,
 )
 from app.services.authorization import log_audit_event
+from app.services.consent import ensure_processing_consent
 from app.services.version_lattice import build_stamps, validate_stamps
 
 logger = logging.getLogger(__name__)
@@ -125,6 +127,14 @@ def score_session(db: Session, participant_session_id: str) -> Optional[Particip
             extra={"participant_session_id": participant_session_id},
         )
         return None
+
+    # Consent is re-checked now: it may have been withdrawn since ingestion.
+    ensure_processing_consent(
+        db,
+        str(participant_session.participant_id),
+        ConsentType.PRODUCT_USE,
+        ConsentType.RESEARCH_PARTICIPATION,
+    )
 
     scores = compute_session_scores(db, participant_session)
     # The model was bound when processing was authorised (session creation).
