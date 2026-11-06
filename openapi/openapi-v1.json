@@ -3959,6 +3959,19 @@
         "title": "StudyCreateRequest",
         "type": "object"
       },
+      "StudyMemberRequest": {
+        "properties": {
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "StudyMemberRequest",
+        "type": "object"
+      },
       "StudyResponse": {
         "properties": {
           "created_at": {
@@ -12397,6 +12410,76 @@
           }
         ],
         "summary": "Exclusion rates for the dataset card",
+        "tags": [
+          "Studies"
+        ]
+      }
+    },
+    "/v1/studies/{study_id}/members": {
+      "post": {
+        "operationId": "add_member_v1_studies__study_id__members_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudyMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add a staff member to a study (admin only)",
         "tags": [
           "Studies"
         ]

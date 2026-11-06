@@ -1056,6 +1056,20 @@ class StudyEnrollment(Base):  # type: ignore[misc, valid-type]
         return f"<StudyEnrollment(participant_id={self.participant_id}, study_id={self.study_id})>"
 
 
+class StudyMember(Base):  # type: ignore[misc, valid-type]
+    """Staff membership of a study: researchers only reach studies they belong to (NEW-16)."""
+
+    __tablename__ = "study_members"
+
+    study_id = Column(
+        String(36), ForeignKey("studies.study_id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id = Column(
+        String(36), ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    added_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class Battery(Base):  # type: ignore[misc, valid-type]
     """A behavioural test battery (jsPsych tasks administered by apgi-battery).
 

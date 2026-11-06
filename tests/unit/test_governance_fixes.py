@@ -21,6 +21,7 @@ def test_grading_is_server_side_and_ungraded_without_key():
 
 
 def test_scoring_discarded_after_consent_withdrawal():
+    from app.config import settings
     from app.database.models import (
         Battery,
         Consent,
@@ -29,7 +30,6 @@ def test_scoring_discarded_after_consent_withdrawal():
         ParticipantSession,
         Study,
     )
-    from app.config import settings
     from app.services.consent import revoke_consent
     from app.services.scoring import score_session
 
@@ -116,3 +116,78 @@ def test_dev_routes_stripped_for_every_production_alias(monkeypatch, env, expect
     monkeypatch.setattr(app_main.settings, "environment", env)
     paths = set(app_main.create_app(test_mode=True).openapi()["paths"])
     assert ("/v1/users/create-default" in paths) is expect_dev
+
+
+# ---- NEW-16 / NEW-05 / NEW-15 -------------------------------------------------
+
+
+def _db():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)()
+
+
+class _User:
+    def __init__(self, user_id, roles):
+        self.user_id, self.roles = user_id, roles
+
+
+def test_researcher_needs_study_membership_for_study_and_participant():
+    from app.database.models import Participant, Study, StudyEnrollment, User
+    from app.services.authorization import Role
+    from app.services.study_access import (
+        add_study_member,
+        can_access_participant,
+        can_access_study,
+    )
+
+    db = _db()
+    u1, u2 = User(username="a", email="a@x.io", password_hash="x"), User(
+        username="b", email="b@x.io", password_hash="x"
+    )
+    s1, s2, p = Study(name="s1"), Study(name="s2"), Participant()
+    db.add_all([u1, u2, s1, s2, p])
+    db.commit()
+    db.add(StudyEnrollment(participant_id=p.participant_id, study_id=s1.study_id))
+    db.commit()
+    add_study_member(db, s1.study_id, u1.user_id)
+
+    r1 = _User(u1.user_id, [Role.RESEARCHER])
+    r2 = _User(u2.user_id, [Role.RESEARCHER])
+    admin = _User("adm", [Role.ADMIN])
+    assert can_access_study(db, r1, s1.study_id) and not can_access_study(db, r1, s2.study_id)
+    assert not can_access_study(db, r2, s1.study_id)
+    assert can_access_participant(db, r1, p) and not can_access_participant(db, r2, p)
+    assert can_access_study(db, admin, s2.study_id) and can_access_participant(db, admin, p)
+
+
+def test_sequence_gap_metrics_count_leading_gaps():
+    from app.database.models import Battery, Participant, ParticipantSession, Study, TrialEvent
+    from app.services import data_quality  # noqa: F401  (import check)
+
+    db = _db()
+    p, st = Participant(), Study(name="s")
+    db.add_all([p, st])
+    db.commit()
+    b = Battery(study_id=st.study_id, name="b", version="1", form_label="A")
+    db.add(b)
+    db.commit()
+    ps = ParticipantSession(
+        participant_id=p.participant_id, study_id=st.study_id, battery_id=b.battery_id
+    )
+    db.add(ps)
+    db.commit()
+    for i, seq in enumerate([2, 3]):  # seq 0 and 1 never arrived
+        db.add(
+            TrialEvent(
+                participant_session_id=ps.participant_session_id,
+                event_id=f"e{i}",
+                seq_no=seq,
+                task_type="t",
+                trial_index=i,
+            )
+        )
+    db.commit()
+    from app.routes.trials import find_sequence_gaps
+
+    assert find_sequence_gaps(db, ps.participant_session_id) == [0, 1]

@@ -49,6 +49,7 @@ from app.services.authorization import (
 from app.services.consent import has_active_consent, record_consent, revoke_consent
 from app.services.explorer_contract import consent_text_for
 from app.services.rls import set_rls_context
+from app.services.study_access import can_access_participant
 
 logger = logging.getLogger(__name__)
 
@@ -73,11 +74,10 @@ def _get_participant_or_404(db: Session, participant_id: str) -> Participant:
     return participant
 
 
-def _check_participant_access(participant: Participant, current_user: TokenPayload) -> None:
-    is_staff = has_any_role(current_user.roles, [Role.ADMIN, Role.RESEARCHER])
-    if is_staff:
-        return
-    if participant.user_id and participant.user_id == current_user.user_id:
+def _check_participant_access(
+    participant: Participant, current_user: TokenPayload, db: Session
+) -> None:
+    if can_access_participant(db, current_user, participant):
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized for this participant"
@@ -131,7 +131,7 @@ async def get_participant(
 ) -> Participant:
     set_rls_context(db, current_user)
     participant = _get_participant_or_404(db, participant_id)
-    _check_participant_access(participant, current_user)
+    _check_participant_access(participant, current_user, db)
     return participant
 
 
@@ -151,7 +151,7 @@ async def delete_participant(
 ) -> dict[str, str]:
     set_rls_context(db, current_user)
     participant = _get_participant_or_404(db, participant_id)
-    _check_participant_access(participant, current_user)
+    _check_participant_access(participant, current_user, db)
 
     db.add(DataDeletion(participant_id=participant_id, requested_by=current_user.user_id))
     for consent_type in ConsentType:
@@ -200,7 +200,7 @@ async def grant_consent(
 ) -> Consent:
     set_rls_context(db, current_user)
     participant = _get_participant_or_404(db, participant_id)
-    _check_participant_access(participant, current_user)
+    _check_participant_access(participant, current_user, db)
 
     # The text is always the server-served canonical text for the configured
     # version; clients cannot supply their own (ConsentGrantRequest forbids it).
@@ -242,7 +242,7 @@ async def revoke_consent_route(
 ) -> None:
     set_rls_context(db, current_user)
     participant = _get_participant_or_404(db, participant_id)
-    _check_participant_access(participant, current_user)
+    _check_participant_access(participant, current_user, db)
 
     revoke_consent(db, participant_id, request.consent_type)
     log_audit_event(
@@ -269,7 +269,7 @@ async def export_participant(
 ) -> dict[str, Any]:
     set_rls_context(db, current_user)
     participant = _get_participant_or_404(db, participant_id)
-    _check_participant_access(participant, current_user)
+    _check_participant_access(participant, current_user, db)
 
     def iso(value: Any) -> Optional[str]:
         return value.isoformat() if value is not None else None
@@ -377,7 +377,7 @@ async def get_consent_status(
 ) -> ConsentStatusResponse:
     set_rls_context(db, current_user)
     participant = _get_participant_or_404(db, participant_id)
-    _check_participant_access(participant, current_user)
+    _check_participant_access(participant, current_user, db)
 
     return ConsentStatusResponse(
         product_use=has_active_consent(db, participant_id, ConsentType.PRODUCT_USE),

@@ -29,11 +29,11 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database.models import (
     Battery,
+    ConsentType,
     ModelVersion,
     ParticipantSession,
     TrialEvent,
 )
-from app.database.models import ConsentType
 from app.services.authorization import log_audit_event
 from app.services.consent import consent_permits
 from app.services.version_lattice import build_stamps, validate_stamps
