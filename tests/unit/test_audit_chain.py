@@ -293,9 +293,8 @@ def test_scoring_is_refused_when_consent_was_never_granted_or_since_withdrawn():
     )
     db.add(session)
     db.commit()
-    revoke_consent(
-        db, participant.participant_id, ConsentType.PRODUCT_USE
-    )  # withdrawn after ingestion
+    for purpose in (ConsentType.PRODUCT_USE, ConsentType.RESEARCH_PARTICIPATION):
+        revoke_consent(db, participant.participant_id, purpose)  # withdrawn after ingestion
     assert score_session(db, session.participant_session_id) is None  # discarded, not stored
     assert db.query(AuditLog).count() == 0  # nothing scored, nothing audited as scored
 
