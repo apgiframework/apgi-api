@@ -157,7 +157,9 @@ def compute(
             .all()
         )
         rows = [r for r in rows if r[0] in ids]
-        missing = [(hi - lo + 1) - n for _, lo, hi, n in rows]
+        # seq_no is zero-based, so the expected range starts at 0, not min(seq_no):
+        # events missing from the start of a session are gaps too.
+        missing = [(hi + 1) - n for _, _lo, hi, n in rows]
         v = {
             "sessions_checked": len(rows),
             "sessions_with_gaps": sum(1 for m in missing if m > 0),

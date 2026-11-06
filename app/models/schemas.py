@@ -1595,8 +1595,12 @@ class IgnitionState(BaseModel):
     until cleared, not defaulted to null.
     """
 
-    ignition_occurred: bool = Field(..., description="Whether ignition has occurred")
-    total_signal: float = Field(..., description="Total ignition signal")
+    ignition_occurred: Optional[bool] = Field(
+        None, description="Whether ignition has occurred (ignition_state gate)"
+    )
+    total_signal: Optional[float] = Field(
+        None, description="Total ignition signal S_t (ignition_state gate)"
+    )
     threshold: Optional[float] = Field(None, description="Ignition threshold (K7-gated)")
     duration_ms: Optional[float] = Field(None, description="Ignition duration in milliseconds")
 

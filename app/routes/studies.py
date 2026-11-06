@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
@@ -13,6 +14,7 @@ from app.models.schemas import ErrorResponse, TokenPayload
 from app.schemas.research import ExclusionReportResponse, StudyCreateRequest, StudyResponse
 from app.services.authorization import Role, log_audit_event, require_any_role
 from app.services.screening import exclusion_report
+from app.services.study_access import add_study_member, require_study_access  # noqa: E402
 
 router = APIRouter(
     prefix="/v1/studies",
@@ -42,6 +44,7 @@ async def create_study(
     db.add(study)
     db.commit()
     db.refresh(study)
+    add_study_member(db, str(study.study_id), current_user.user_id)
 
     log_audit_event(
         db=db,
@@ -75,8 +78,37 @@ async def get_exclusion_report(
     study_id: str,
     battery_id: Optional[str] = None,
     db: Session = Depends(get_db),
-    _current_user: TokenPayload = Depends(require_any_role([Role.ADMIN, Role.RESEARCHER])),
+    current_user: TokenPayload = Depends(require_any_role([Role.ADMIN, Role.RESEARCHER])),
 ) -> dict[str, Any]:
+    require_study_access(db, current_user, study_id)
     if db.query(Study).filter(Study.study_id == study_id).first() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Study not found")
     return exclusion_report(db, study_id, battery_id)
+
+
+class StudyMemberRequest(BaseModel):
+    user_id: str
+
+
+@router.post(
+    "/{study_id}/members",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Add a staff member to a study (admin only)",
+)
+async def add_member(
+    study_id: str,
+    request: StudyMemberRequest,
+    db: Session = Depends(get_db),
+    current_user: TokenPayload = Depends(require_any_role([Role.ADMIN])),
+) -> None:
+    if db.query(Study).filter(Study.study_id == study_id).first() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Study not found")
+    add_study_member(db, study_id, request.user_id)
+    log_audit_event(
+        db=db,
+        user_id=current_user.user_id,
+        action="study:add_member",
+        resource_type="study",
+        resource_id=study_id,
+        details={"member_user_id": request.user_id},
+    )

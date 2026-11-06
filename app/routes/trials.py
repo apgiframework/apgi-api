@@ -62,6 +62,8 @@ from app.services.screening import (
     screen_session,
     timing_error_distribution,
 )
+from app.services.study_access import can_access_study
+from app.services.task_grading import grade_trial
 from app.services.trial_storage import write_raw_trial_event
 
 logger = logging.getLogger(__name__)
@@ -92,6 +94,10 @@ def _check_session_access(
     db: Session, session: ParticipantSession, current_user: TokenPayload
 ) -> Participant:
     if has_any_role(current_user.roles, [Role.ADMIN, Role.RESEARCHER]):
+        if not can_access_study(db, current_user, str(session.study_id)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this study"
+            )
         participant = (
             db.query(Participant)
             .filter(Participant.participant_id == session.participant_id)
@@ -325,7 +331,8 @@ async def ingest_trial_events(
             trial_index=event.trial_index,
             response_value=event.response_value,
             rt_ms=event.rt_ms,
-            correct=event.correct,
+            # Server-graded only: the client's `correct` claim is ignored.
+            correct=grade_trial(event.task_type, event.response_value),
             raw_gcs_object=raw_gcs_object,
         )
         db.add(trial)
@@ -427,6 +434,26 @@ async def complete_participant_session(
         .scalar()
         or 0
     )
+
+    if session.status != ParticipantSessionStatus.COMPLETED:
+        # Only an in-progress session with data can complete; abandoned/scheduled/empty
+        # sessions must not become "completed", and consent is rechecked first.
+        if session.status != ParticipantSessionStatus.IN_PROGRESS:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot complete a session in state '{session.status.value}'",
+            )
+        if trial_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot complete a session with no trials",
+            )
+        require_any_consent(
+            db,
+            str(session.participant_id),
+            ConsentType.PRODUCT_USE,
+            ConsentType.RESEARCH_PARTICIPATION,
+        )
 
     missing = (
         []

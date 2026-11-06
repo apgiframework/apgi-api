@@ -205,7 +205,9 @@ class TrialEventIngestRequest(BaseModel):
     )
     response_value: Optional[dict[str, Any]] = None
     rt_ms: Optional[float] = Field(None, ge=0)
-    correct: Optional[bool] = None
+    correct: Optional[bool] = (
+        None  # accepted for compatibility; ignored (server grades, see task_grading)
+    )
     raw_payload: Optional[dict[str, Any]] = Field(
         None,
         description="Full raw trial payload (RT distributions, logs) — written to restricted storage, not Postgres",

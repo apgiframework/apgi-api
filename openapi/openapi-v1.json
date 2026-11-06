@@ -1319,9 +1319,16 @@
             "title": "Duration Ms"
           },
           "ignition_occurred": {
-            "description": "Whether ignition has occurred",
-            "title": "Ignition Occurred",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether ignition has occurred (ignition_state gate)",
+            "title": "Ignition Occurred"
           },
           "threshold": {
             "anyOf": [
@@ -1336,15 +1343,18 @@
             "title": "Threshold"
           },
           "total_signal": {
-            "description": "Total ignition signal",
-            "title": "Total Signal",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Total ignition signal S_t (ignition_state gate)",
+            "title": "Total Signal"
           }
         },
-        "required": [
-          "ignition_occurred",
-          "total_signal"
-        ],
         "title": "IgnitionState",
         "type": "object"
       },
@@ -3947,6 +3957,19 @@
           "name"
         ],
         "title": "StudyCreateRequest",
+        "type": "object"
+      },
+      "StudyMemberRequest": {
+        "properties": {
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "StudyMemberRequest",
         "type": "object"
       },
       "StudyResponse": {
@@ -12387,6 +12410,76 @@
           }
         ],
         "summary": "Exclusion rates for the dataset card",
+        "tags": [
+          "Studies"
+        ]
+      }
+    },
+    "/v1/studies/{study_id}/members": {
+      "post": {
+        "operationId": "add_member_v1_studies__study_id__members_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudyMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add a staff member to a study (admin only)",
         "tags": [
           "Studies"
         ]

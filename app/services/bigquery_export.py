@@ -69,6 +69,20 @@ def export_session(db: Session, participant_session_id: str) -> bool:
     if participant_session is None or participant_session.scores is None:
         return False
 
+    # The de-identified dataset is a research store: product-only use must not reach it,
+    # and consent withdrawn since scoring was queued blocks publication.
+    from app.database.models import ConsentType
+    from app.services.consent import consent_permits
+
+    if not consent_permits(
+        db, str(participant_session.participant_id), ConsentType.RESEARCH_PARTICIPATION
+    ):
+        logger.warning(
+            "export_session: research consent absent; export skipped",
+            extra={"participant_session_id": participant_session_id},
+        )
+        return False
+
     row = _row_for_session(participant_session)
 
     try:

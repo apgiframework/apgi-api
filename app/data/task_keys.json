@@ -1,0 +1,4 @@
+{
+  "_comment": "Server-controlled answer keys. A task_type absent here is never graded: accuracy is only computed from server grades, never from a client-supplied 'correct'. Entry shape: {task_type: {stimulus_field, response_field, answers: {stimulus: expected_response}}}.",
+  "tasks": {}
+}
