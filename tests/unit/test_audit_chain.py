@@ -293,9 +293,10 @@ def test_scoring_is_refused_when_consent_was_never_granted_or_since_withdrawn():
         score_session(db, session.participant_session_id)
     assert db.query(AuditLog).count() == 0  # nothing scored, nothing audited as scored
 
+
+def test_research_export_requires_active_research_consent(monkeypatch):
     from app.config import settings
     from app.database.models import ParticipantSession
-    from app.config import settings
     from app.services import bigquery_export
 
     db, participant, study, battery = _scored_session_db()  # product-use consent only
