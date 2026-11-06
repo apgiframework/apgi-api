@@ -102,6 +102,14 @@ def verify_audit_chain() -> None:
             .all()
         )
         ok, broken_id = verify_chain(rows)
+        if ok:
+            from app.database.models import AuditChainHead
+
+            head = db.query(AuditChainHead).filter(AuditChainHead.id == 1).first()
+            expected = int(head.last_seq) if head is not None else 0
+            if len(rows) != expected:
+                # Tail truncation: the head records more appends than remain.
+                ok, broken_id = False, f"<chain length {len(rows)} != head {expected}>"
     finally:
         db.close()
     if not ok:
