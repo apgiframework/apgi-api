@@ -587,6 +587,16 @@ class WebhookDelivery(Base):  # type: ignore[misc, valid-type]
         return f"<WebhookDelivery(delivery_id={self.delivery_id}, status={self.status})>"
 
 
+class AuditChainHead(Base):
+    """Single-row lock target that serialises audit appends, even on an empty chain."""
+
+    __tablename__ = "audit_chain_head"
+
+    id = Column(Integer, primary_key=True, default=1)
+    last_seq = Column(BigInteger().with_variant(Integer, "sqlite"), nullable=False, default=0)
+    last_record_sha256 = Column(String(64), nullable=False, default="0" * 64)
+
+
 class AuditLog(Base):  # type: ignore[misc, valid-type]
     """Audit log for tracking user actions and access events."""
 
@@ -643,6 +653,19 @@ class AuditLog(Base):  # type: ignore[misc, valid-type]
         String(32),
         nullable=True,
         comment="Version label of the audit signing key that produced `signature`",
+    )
+    actor_id = Column(
+        String(36),
+        nullable=True,
+        comment="Immutable copy of the acting user id (no FK) so signatures survive user erasure",
+    )
+    canonical_version = Column(
+        Integer,
+        nullable=False,
+        default=2,
+        server_default="1",
+        comment="Canonical signing format: 1 = legacy fields only; 2 = binds actor, timestamp, "
+        "chain_seq and signing_key_version",
     )
 
     # Relationships

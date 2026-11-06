@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import AuditLog, Base
+from app.database.models import AuditChainHead, AuditLog, Base
 from app.services.audit_signing import verify_chain
 from app.services.authorization import log_audit_event
 
@@ -12,7 +12,7 @@ from app.services.authorization import log_audit_event
 @pytest.fixture()
 def db():
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine, tables=[AuditLog.__table__])
+    Base.metadata.create_all(engine, tables=[AuditLog.__table__, AuditChainHead.__table__])
     session = sessionmaker(bind=engine)()
     yield session
     session.close()
@@ -181,3 +181,83 @@ def test_scoring_fails_when_the_bound_model_is_gone():
     db.commit()
     with pytest.raises(ModelBindingError):
         score_session(db, session.participant_session_id)
+
+
+# --- DEF-05 / DEF-06 / S0-PR0-03: bound metadata, historical keys, serialised head -----
+
+
+def test_tampered_timestamp_key_version_or_seq_is_detected(db):
+    from datetime import timedelta
+
+    _write(db)
+    for field, value in (
+        ("timestamp", lambda r: r.timestamp + timedelta(days=1)),
+        ("signing_key_version", lambda r: "v9"),
+        ("actor_id", lambda r: "someone-else"),
+    ):
+        row = _rows(db)[1]
+        original = getattr(row, field)
+        setattr(row, field, value(row))
+        db.commit()
+        assert verify_chain(_rows(db)) == (False, row.audit_id), field
+        setattr(row, field, original)
+        db.commit()
+    assert verify_chain(_rows(db)) == (True, None)
+
+
+def test_user_erasure_nulling_user_id_keeps_chain_valid(db):
+    log_audit_event(db, "user-1", "login", "user", "user-1")
+    row = _rows(db)[0]
+    row.user_id = None  # what ON DELETE SET NULL does
+    db.commit()
+    assert verify_chain(_rows(db)) == (True, None)
+
+
+def test_rotated_key_verifies_old_rows_with_their_own_key(db, monkeypatch):
+    import app.services.audit_signing as signing
+    import app.services.authorization as authz
+
+    _write(db, 2)
+    old_key = signing.settings.audit_signing_key
+    # Other tests may reload app.config; patch the object each module actually uses.
+    for st in {id(signing.settings): signing.settings, id(authz.settings): authz.settings}.values():
+        monkeypatch.setattr(st, "audit_signing_key", "n" * 40)
+        monkeypatch.setattr(st, "audit_signing_key_version", "v2")
+        monkeypatch.setattr(st, "audit_signing_keys", {"v1": old_key}, raising=False)
+    settings = signing.settings
+    log_audit_event(db, None, "score.generate", "session", "after-rotation")
+    rows = _rows(db)
+    assert [r.signing_key_version for r in rows] == ["v1", "v1", "v2"]
+    assert verify_chain(rows) == (True, None)
+    # Without the retired key the old rows can no longer be verified.
+    monkeypatch.setattr(signing.settings, "audit_signing_keys", {})
+    assert verify_chain(_rows(db))[0] is False
+
+
+def test_missing_signing_key_refuses_the_write(db, monkeypatch):
+    import app.services.audit_signing as signing
+    import app.services.authorization as authz
+    from app.services.audit_signing import AuditSigningNotConfiguredError
+
+    for st in {id(signing.settings): signing.settings, id(authz.settings): authz.settings}.values():
+        monkeypatch.setattr(st, "audit_signing_key", None)
+    with pytest.raises(AuditSigningNotConfiguredError):
+        log_audit_event(db, None, "x", "y", "z")
+    assert db.query(AuditLog).count() == 0
+
+
+def test_first_append_goes_through_the_chain_head(db):
+    assert db.query(AuditChainHead).count() == 0
+    log_audit_event(db, None, "a", "r", "1")
+    head = db.query(AuditChainHead).one()
+    assert head.last_seq == 1
+    log_audit_event(db, None, "a", "r", "2")
+    assert db.query(AuditChainHead).one().last_seq == 2
+    assert verify_chain(_rows(db)) == (True, None)
+
+
+def test_sequence_gap_is_detected(db):
+    _write(db, 3)
+    db.delete(_rows(db)[0])
+    db.commit()
+    assert verify_chain(_rows(db))[0] is False

@@ -299,6 +299,11 @@ class Settings:
         # Label of the signing key (e.g. the Secret Manager version), stored
         # on every audit row so records verify against the right key after rotation.
         self.audit_signing_key_version: str = os.getenv("AUDIT_SIGNING_KEY_VERSION", "v1")
+        # Historical keys by version label, as a JSON object
+        # (e.g. '{"v1": "<old key>", "v2": "<current key>"}'). Rows verify against the
+        # key named by their own signing_key_version; AUDIT_SIGNING_KEY is always the
+        # key for AUDIT_SIGNING_KEY_VERSION.
+        self.audit_signing_keys: dict = self._parse_audit_keys(os.getenv("AUDIT_SIGNING_KEYS"))
 
         # The four consent purposes, independently versioned. A participant
         # must grant each before their data may be used for that purpose
@@ -353,6 +358,22 @@ class Settings:
 
         # Validate security settings after initialization
         self.__post_init__()
+
+    @staticmethod
+    def _parse_audit_keys(raw: Optional[str]) -> dict:
+        if not raw:
+            return {}
+        import json
+
+        try:
+            parsed = json.loads(raw)
+        except ValueError as exc:
+            raise ValueError("AUDIT_SIGNING_KEYS must be a JSON object of version -> key") from exc
+        if not isinstance(parsed, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in parsed.items()
+        ):
+            raise ValueError("AUDIT_SIGNING_KEYS must be a JSON object of version -> key")
+        return parsed
 
     def _parse_cors_origins(self) -> List[str]:
         """Parse CORS origins from environment variable."""

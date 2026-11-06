@@ -6,6 +6,7 @@ Role-Based Access Control (RBAC) for API endpoints.
 
 import logging
 import uuid
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, cast
 
@@ -15,10 +16,17 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.connection import get_db
-from app.database.models import AuditLog
+from app.database.models import AuditChainHead, AuditLog
 from app.exceptions import AuthorizationError, InvalidTokenError
 from app.models.schemas import TokenPayload as TokenPayload
-from app.services.audit_signing import GENESIS_HASH, record_sha256, sign_audit_entry
+from app.services.audit_signing import (
+    CANONICAL_BOUND,
+    GENESIS_HASH,
+    AuditSigningNotConfiguredError,
+    get_signing_key,
+    record_sha256,
+    sign_audit_entry,
+)
 from app.services.auth_manager import AuthManager
 
 logger = logging.getLogger(__name__)
@@ -539,49 +547,60 @@ def log_audit_event(
     if db is None:
         return
 
+    # Signing is mandatory: an unsigned audit row is an unverifiable one, so a
+    # missing key refuses the write instead of silently degrading.
+    if not get_signing_key(settings.audit_signing_key_version):
+        raise AuditSigningNotConfiguredError(
+            "AUDIT_SIGNING_KEY is not configured; refusing to write an unsigned audit record"
+        )
+
     try:
         audit_id = str(uuid.uuid4())
-        signature: Optional[str] = None
-        chain_seq: Optional[int] = None
-        prev_hash: Optional[str] = None
-        key_version: Optional[str] = None
-        if settings.audit_signing_key:
-            last = (
-                db.query(AuditLog)
-                .filter(AuditLog.chain_seq.isnot(None))
-                .order_by(AuditLog.chain_seq.desc())
-                .with_for_update()
-                .first()
-            )
-            if last is None:
-                chain_seq, prev_hash = 1, GENESIS_HASH
-            else:
-                chain_seq = int(last.chain_seq) + 1
-                prev_hash = record_sha256(
-                    last.audit_id,  # type: ignore[arg-type]
-                    last.user_id,  # type: ignore[arg-type]
-                    last.action,  # type: ignore[arg-type]
-                    last.resource_type,  # type: ignore[arg-type]
-                    last.resource_id,  # type: ignore[arg-type]
-                    last.status,  # type: ignore[arg-type]
-                    last.details,  # type: ignore[arg-type]
-                    last.prev_record_sha256,  # type: ignore[arg-type]
-                    last.signature,  # type: ignore[arg-type]
-                )
-            key_version = settings.audit_signing_key_version
-            signature = sign_audit_entry(
-                audit_id,
-                user_id,
-                action,
-                resource_type,
-                resource_id,
-                status,
-                details or {},
-                prev_hash,
-            )
+        timestamp = datetime.now(timezone.utc)
+        key_version = settings.audit_signing_key_version
+        # Lock the single chain-head row so appends serialise even when the
+        # chain is empty; create it on first use (the migration seeds it).
+        head = db.query(AuditChainHead).filter(AuditChainHead.id == 1).with_for_update().first()
+        if head is None:
+            head = AuditChainHead(id=1, last_seq=0, last_record_sha256=GENESIS_HASH)
+            db.add(head)
+            db.flush()
+        chain_seq = int(head.last_seq) + 1
+        prev_hash = str(head.last_record_sha256)
+        signature = sign_audit_entry(
+            audit_id,
+            user_id,
+            action,
+            resource_type,
+            resource_id,
+            status,
+            details or {},
+            prev_hash,
+            canonical_version=CANONICAL_BOUND,
+            timestamp=timestamp,
+            chain_seq=chain_seq,
+            signing_key_version=key_version,
+        )
+        head.last_seq = chain_seq
+        head.last_record_sha256 = record_sha256(
+            audit_id,
+            user_id,
+            action,
+            resource_type,
+            resource_id,
+            status,
+            details or {},
+            prev_hash,
+            signature,
+            canonical_version=CANONICAL_BOUND,
+            timestamp=timestamp,
+            chain_seq=chain_seq,
+            signing_key_version=key_version,
+        )
         audit_log = AuditLog(
             audit_id=audit_id,
             user_id=user_id,
+            actor_id=user_id,
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
@@ -589,10 +608,12 @@ def log_audit_event(
             ip_address=ip_address,
             user_agent=user_agent,
             status=status,
+            timestamp=timestamp,
             signature=signature,
             chain_seq=chain_seq,
             prev_record_sha256=prev_hash,
             signing_key_version=key_version,
+            canonical_version=CANONICAL_BOUND,
         )
         db.add(audit_log)
         db.commit()
