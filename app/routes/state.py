@@ -28,7 +28,6 @@ from app.modules.scoring.exposure import ExposureGate, GateStateResponse
 from app.routes.sessions import get_session_manager, validate_session_ownership
 from app.services.auth_manager import TokenPayload
 from app.services.authorization import Permission, get_current_user, require_permission
-from app.services.k7_gate import K7Parameter, is_cleared
 from app.services.session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
@@ -84,6 +83,14 @@ async def get_system_state(
     # Validate session ownership
     await validate_session_ownership(session_id, current_user.user_id, manager, db)
 
+    # Every latent field goes through the evidence-scoped gate. This route has no
+    # session scope context (model/version/observation model/task/population), and
+    # an incomplete context never clears, so latent fields are withheld here.
+    gate = ExposureGate()
+
+    def is_cleared(parameter: str) -> bool:
+        return gate.is_cleared(parameter)
+
     try:
         # Get session with ownership validation
         sim_session = await manager.get_session(session_id, current_user.user_id)
@@ -104,11 +111,17 @@ async def get_system_state(
         response = SystemStateResponse(
             time_ms=state.get("time", 0.0),
             ignition=IgnitionState(
-                ignition_occurred=ignition_data.get("ignition_occurred", False),
-                total_signal=ignition_data.get("total_signal", 0.0),
+                ignition_occurred=(
+                    ignition_data.get("ignition_occurred", False)
+                    if is_cleared("ignition_state")
+                    else None
+                ),
+                total_signal=(
+                    ignition_data.get("total_signal", 0.0) if is_cleared("ignition_state") else None
+                ),
                 threshold=(
                     ignition_data.get("threshold", 0.0)
-                    if is_cleared(K7Parameter.IGNITION_THRESHOLD)
+                    if is_cleared("ignition_threshold")
                     else None
                 ),
                 duration_ms=ignition_data.get("duration_ms"),
@@ -121,17 +134,17 @@ async def get_system_state(
             body=BodyState(
                 heart_rate=(
                     body_data.get("heart_rate", 70.0)
-                    if is_cleared(K7Parameter.INTEROCEPTIVE_BODY_STATE)
+                    if is_cleared("interoceptive_body_state")
                     else None
                 ),
                 cortisol=(
                     body_data.get("cortisol", 0.1)
-                    if is_cleared(K7Parameter.INTEROCEPTIVE_BODY_STATE)
+                    if is_cleared("interoceptive_body_state")
                     else None
                 ),
                 temperature=(
                     body_data.get("temperature", 37.0)
-                    if is_cleared(K7Parameter.INTEROCEPTIVE_BODY_STATE)
+                    if is_cleared("interoceptive_body_state")
                     else None
                 ),
             ),
@@ -139,12 +152,12 @@ async def get_system_state(
             precision=PrecisionState(
                 exteroceptive=(
                     precision_data.get("exteroceptive", 1.0)
-                    if is_cleared(K7Parameter.PRECISION_EXTEROCEPTIVE)
+                    if is_cleared("precision_exteroceptive")
                     else None
                 ),
                 interoceptive=(
                     precision_data.get("interoceptive", 1.0)
-                    if is_cleared(K7Parameter.PRECISION_INTEROCEPTIVE)
+                    if is_cleared("precision_interoceptive")
                     else None
                 ),
             ),

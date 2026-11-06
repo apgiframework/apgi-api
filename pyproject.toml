@@ -85,11 +85,11 @@ Documentation = "https://github.com/apgiframework/apgi-api/tree/main/docs"
 Repository = "https://github.com/apgiframework/apgi-api"
 Issues = "https://github.com/apgiframework/apgi-api/issues"
 
-[tool.setuptools]
-packages = ["app"]
+[tool.setuptools.packages.find]
+include = ["app", "app.*"]
 
 [tool.setuptools.package-data]
-app = ["py.typed", "templates/*"]
+"*" = ["py.typed", "templates/*", "*.yaml", "*.yml", "*.json", "*.ini", "*.mako"]
 
 [tool.black]
 line-length = 100

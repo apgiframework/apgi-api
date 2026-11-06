@@ -311,7 +311,9 @@ def panel_quality(db: Session, origin: Optional[str] = None) -> Dict[str, Any]:
         )
         gap_query = gap_query.filter(TrialEvent.participant_session_id.in_(ids.subquery()))
         rows = gap_query.group_by(TrialEvent.participant_session_id).all()
-        missing = [(hi - lo + 1) - n for _, lo, hi, n in rows]
+        # seq_no is zero-based, so the expected range starts at 0, not min(seq_no):
+        # events missing from the start of a session are gaps too.
+        missing = [(hi + 1) - n for _, _lo, hi, n in rows]
         return {
             "sessions_checked": len(rows),
             "sessions_with_gaps": sum(1 for m in missing if m > 0),

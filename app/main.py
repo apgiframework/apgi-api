@@ -179,7 +179,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.db_available = True
     except Exception as e:
         logger.error("Failed to initialize database", component="database", error=str(e))
-        if settings.environment == "production":
+        if settings.environment.lower() in ("production", "prod"):
             raise
         logger.warning("Continuing in degraded mode without database", component="database")
         app.state.db_available = False
@@ -430,7 +430,7 @@ All endpoints except `/health`, `/docs`, and `/openapi.json` require authenticat
     app.include_router(console.router)
 
     # Dev-only routes (/v1/users/create-default, /v1/profiling/*) never ship to production.
-    if settings.environment != "production":
+    if settings.environment.lower() not in ("production", "prod"):
         app.include_router(users.dev_router)
         app.include_router(metrics.dev_router)
 

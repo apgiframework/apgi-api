@@ -2,7 +2,7 @@
 # Multi-stage build for minimal image size
 
 # Build stage
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /build
 
@@ -19,7 +19,7 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir --no-warn-script-location -r requirements.txt
 
 # Runtime stage
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -43,7 +43,7 @@ ENV PATH=/home/apgi/.local/bin:$PATH
 
 # Copy application code
 COPY --chown=apgi:apgi app/ ./app/
-COPY --chown=apgi:apgi alembic.ini ./
+COPY --chown=apgi:apgi alembic.ini identifiers.yaml ./
 
 # Switch to non-root user
 USER apgi

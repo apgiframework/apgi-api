@@ -35,7 +35,7 @@ from app.database.models import (
     TrialEvent,
 )
 from app.services.authorization import log_audit_event
-from app.services.consent import ensure_processing_consent
+from app.services.consent import consent_permits
 from app.services.version_lattice import build_stamps, validate_stamps
 
 logger = logging.getLogger(__name__)
@@ -128,13 +128,19 @@ def score_session(db: Session, participant_session_id: str) -> Optional[Particip
         )
         return None
 
-    # Consent is re-checked now: it may have been withdrawn since ingestion.
-    ensure_processing_consent(
+    # Consent is rechecked at execution time: the work may have been queued
+    # before the participant withdrew. Withdrawn work is discarded, not stored.
+    if not consent_permits(
         db,
         str(participant_session.participant_id),
         ConsentType.PRODUCT_USE,
         ConsentType.RESEARCH_PARTICIPATION,
-    )
+    ):
+        logger.warning(
+            "score_session: consent withdrawn or absent; scoring discarded",
+            extra={"participant_session_id": participant_session_id},
+        )
+        return None
 
     scores = compute_session_scores(db, participant_session)
     # The model was bound when processing was authorised (session creation).

@@ -71,10 +71,7 @@ def test_score_session_writes_verifiable_chained_record_and_tamper_fails(monkeyp
     participant, study = Participant(), Study(name="s")
     db.add_all([participant, study])
     db.commit()
-    from app.database.models import ConsentType
-    from app.services.consent import record_consent
-
-    record_consent(db, participant.participant_id, ConsentType.PRODUCT_USE, "consent text")
+    _grant_consent(db, participant)
     battery = Battery(study_id=study.study_id, name="b", version="1.0", form_label="A")
     db.add(battery)
     db.commit()
@@ -128,6 +125,21 @@ def test_verify_audit_chain_cli(db, monkeypatch):
     assert result.exit_code == 1
 
 
+def _grant_consent(db, participant):
+    from app.config import settings
+    from app.database.models import Consent, ConsentType
+
+    db.add(
+        Consent(
+            participant_id=participant.participant_id,
+            consent_type=ConsentType.RESEARCH_PARTICIPATION,
+            version=settings.consent_current_versions[ConsentType.RESEARCH_PARTICIPATION.value],
+            consent_text_hash="0" * 64,
+        )
+    )
+    db.commit()
+
+
 def _scored_session_db():
     from app.database.models import Battery, Participant, Study
 
@@ -137,10 +149,7 @@ def _scored_session_db():
     participant, study = Participant(), Study(name="s")
     db.add_all([participant, study])
     db.commit()
-    from app.database.models import ConsentType
-    from app.services.consent import record_consent
-
-    record_consent(db, participant.participant_id, ConsentType.PRODUCT_USE, "consent text")
+    _grant_consent(db, participant)
     battery = Battery(study_id=study.study_id, name="b", version="1.0", form_label="A")
     db.add(battery)
     db.commit()
@@ -272,10 +281,8 @@ def test_sequence_gap_is_detected(db):
 
 
 def test_scoring_is_refused_when_consent_was_never_granted_or_since_withdrawn():
-    import pytest
-
     from app.database.models import ConsentType, ParticipantSession
-    from app.services.consent import ConsentWithdrawnError, revoke_consent
+    from app.services.consent import revoke_consent
     from app.services.scoring import score_session
 
     db, participant, study, battery = _scored_session_db()
@@ -289,8 +296,7 @@ def test_scoring_is_refused_when_consent_was_never_granted_or_since_withdrawn():
     revoke_consent(
         db, participant.participant_id, ConsentType.PRODUCT_USE
     )  # withdrawn after ingestion
-    with pytest.raises(ConsentWithdrawnError):
-        score_session(db, session.participant_session_id)
+    assert score_session(db, session.participant_session_id) is None  # discarded, not stored
     assert db.query(AuditLog).count() == 0  # nothing scored, nothing audited as scored
 
 

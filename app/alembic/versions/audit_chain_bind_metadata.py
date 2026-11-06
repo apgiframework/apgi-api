@@ -1,7 +1,7 @@
 """Bind audit metadata, add a serialised chain head and an immutable actor id.
 
 Revision ID: audit_chain_bind_metadata
-Revises: reconcile_orm_drift
+Revises: add_study_members
 Create Date: 2026-11-05
 
 - ``audit_logs.canonical_version`` (1 = legacy fields, 2 = also binds actor,
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "audit_chain_bind_metadata"
-down_revision = "reconcile_orm_drift"
+down_revision = "add_study_members"
 branch_labels = None
 depends_on = None
 

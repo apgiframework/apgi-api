@@ -7,7 +7,6 @@ not allow-listed, so a new field cannot leak by omission.
 
 from __future__ import annotations
 
-import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
@@ -64,27 +63,17 @@ EVIDENCE_FIELDS = ("validation_id", "dataset_sha256", "reviewer")
 SCOPE_FIELDS = ("model", "model_version", "observation_model", "task_design", "population")
 
 
-_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-
-
-def _validate_entry(name: str, entry: Dict[str, Any]) -> None:
-    evidence = entry.get("evidence") or {}
-    missing = [f for f in EVIDENCE_FIELDS if not evidence.get(f)]
-    scope = evidence.get("scope") or {}
-    missing += [f"scope.{f}" for f in SCOPE_FIELDS if not scope.get(f)]
-    if missing:
-        raise GateTableError(f"Clearance for {name!r} is missing {missing}")
-    # Evidence must be well-formed, not merely non-empty. (Resolving the
-    # validation run and dataset bytes needs the validation registry — S4.)
-    if not _SHA256_RE.match(str(evidence["dataset_sha256"])):
-        raise GateTableError(f"Clearance for {name!r} has a malformed dataset_sha256")
-
-
 def _validate_clearances(latent: Dict[str, Any]) -> None:
     """Fail closed at start-up on any 'cleared' entry lacking evidence or scope."""
     for name, entry in latent.items():
-        if entry.get("status") == "cleared":
-            _validate_entry(name, entry)
+        if entry.get("status") != "cleared":
+            continue
+        evidence = entry.get("evidence") or {}
+        missing = [f for f in EVIDENCE_FIELDS if not evidence.get(f)]
+        scope = evidence.get("scope") or {}
+        missing += [f"scope.{f}" for f in SCOPE_FIELDS if not scope.get(f)]
+        if missing:
+            raise GateTableError(f"Clearance for {name!r} is missing {missing}")
 
 
 class ExposureGate:
@@ -111,40 +100,43 @@ class ExposureGate:
                 self._walk(item)
 
     def is_cleared(self, parameter: str, **context: str) -> bool:
-        """True only if `parameter` is cleared with complete evidence AND the caller
-        supplies *all five* scope fields (model, model_version, observation_model,
-        task_design, population), each equal to the paradigm in which recovery was
-        shown. Missing, extra or mismatched context is never cleared, and unknown
-        parameters are not cleared."""
+        """True only if `parameter` is cleared AND every scope field in `context`
+        (model, model_version, observation_model, task_design, population) equals
+        the paradigm in which recovery was shown. Unknown parameters are not cleared.
+
+        The context must name EVERY scope field: an absent or partial context is
+        never cleared (an empty context cannot vacuously match any scope)."""
         entry = self.table["latent_parameters"].get(parameter)
         if not entry or entry.get("status") != "cleared":
             return False
-        if set(context) != set(SCOPE_FIELDS) or not all(context.values()):
+        if any(not context.get(field) for field in SCOPE_FIELDS):
             return False
-        try:
-            _validate_entry(parameter, entry)
-        except GateTableError:
-            return False
-        scope = entry["evidence"]["scope"]
-        return all(scope.get(key) == value for key, value in context.items())
+        scope = (entry.get("evidence") or {}).get("scope") or {}
+        return all(scope.get(field) == context[field] for field in SCOPE_FIELDS)
 
     def gate_state(
-        self, session_id: str, *parameters: str, context: Dict[str, str] | None = None
+        self,
+        session_id: str,
+        *parameters: str,
+        context: Dict[str, str] | None = None,
     ) -> GateStateResponse:
         """Gate state for `parameters` (all latent parameters if none given). Never values.
 
-        A parameter is exposed only when `context` carries the full paradigm scope
-        and it matches the recorded clearance; without context everything is withheld."""
+        A parameter is `exposed` only when its clearance evidence scope matches the
+        complete `context` (model, model_version, observation_model, task_design,
+        population); a table-level 'cleared' status alone is not enough."""
         latent = self.table["latent_parameters"]
+        ctx = context or {}
         states = []
         for name in parameters or tuple(latent):
-            exposed = self.is_cleared(name, **(context or {}))
+            entry = latent[name]
+            exposed = self.is_cleared(name, **ctx)
             if exposed:
                 reason = ""
-            elif context is None or set(context) != set(SCOPE_FIELDS):
-                reason = "Full paradigm scope context is required to clear a parameter"
+            elif entry.get("status") == "cleared" and bool(entry.get("evidence")):
+                reason = "Clearance does not cover this session's complete evidence scope"
             else:
-                reason = "No identifiability evidence record matching this paradigm"
+                reason = "No identifiability evidence record in gate table"
             states.append(
                 GateParameterState(
                     parameter=name,

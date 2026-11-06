@@ -145,33 +145,30 @@ class TestGetSystemState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["time_ms"] == 1000.0
-        assert data["ignition"]["ignition_occurred"] is True
         assert data["workspace"]["is_broadcasting"] is True
+        # S_t-derived ignition fields are gated like the other latent quantities (NEW-03).
+        assert "ignition_occurred" not in data["ignition"]
+        assert "total_signal" not in data["ignition"]
         # K7-gated fields are withheld by default (governing doc §3.6):
         # absent from the response, not present as null.
         assert "threshold" not in data["ignition"]
         assert data["body"] == {}
         assert data["precision"] == {}
 
-    def test_get_system_state_k7_cleared_parameters_exposed(
+    def test_legacy_k7_environment_clearance_no_longer_exposes_latent_fields(
         self,
         client: TestClient,
         mock_manager: AsyncMock,
         mock_db: MagicMock,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Once a parameter clears K7, its field is present with the real value."""
+        """NEW-03: the old env-based K7 allow-list must not bypass the evidence-scoped gate."""
         from app.services import k7_gate
 
         monkeypatch.setattr(
             k7_gate.settings,
             "k7_cleared_parameters",
-            {
-                "ignition_threshold",
-                "precision_exteroceptive",
-                "precision_interoceptive",
-                "interoceptive_body_state",
-            },
+            {"ignition_threshold", "precision_exteroceptive", "interoceptive_body_state"},
         )
         self._setup_db(mock_db)
         sim_session = _make_sim_session()
@@ -183,13 +180,11 @@ class TestGetSystemState:
         }
         mock_manager.get_session.return_value = sim_session
 
-        resp = client.get("/v1/sessions/sess-1/state")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["ignition"]["threshold"] == 2.0
-        assert data["body"]["heart_rate"] == 85.0
-        assert data["precision"]["exteroceptive"] == 0.9
-        assert data["precision"]["interoceptive"] == 0.8
+        data = client.get("/v1/sessions/sess-1/state").json()
+        assert "threshold" not in data["ignition"]
+        assert "total_signal" not in data["ignition"]
+        assert data["body"] == {}
+        assert data["precision"] == {}
 
     def test_get_system_state_with_defaults(
         self, client: TestClient, mock_manager: AsyncMock, mock_db: MagicMock
@@ -204,7 +199,7 @@ class TestGetSystemState:
         assert resp.status_code == 200
         data = resp.json()
         assert data["time_ms"] == 0.0
-        assert data["ignition"]["ignition_occurred"] is False
+        assert "ignition_occurred" not in data["ignition"]
         assert data["body"] == {}
 
     def test_get_system_state_session_not_found_in_db(

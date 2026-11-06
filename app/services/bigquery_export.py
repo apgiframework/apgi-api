@@ -27,8 +27,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database.models import ConsentType, ParticipantSession
-from app.services.consent import ConsentWithdrawnError, ensure_processing_consent
+from app.database.models import ParticipantSession
 
 logger = logging.getLogger(__name__)
 
@@ -70,15 +69,16 @@ def export_session(db: Session, participant_session_id: str) -> bool:
     if participant_session is None or participant_session.scores is None:
         return False
 
-    # The de-identified dataset is a research store: product-only participants,
-    # and anyone who has since withdrawn research consent, must not reach it.
-    try:
-        ensure_processing_consent(
-            db, str(participant_session.participant_id), ConsentType.RESEARCH_PARTICIPATION
-        )
-    except ConsentWithdrawnError:
+    # The de-identified dataset is a research store: product-only use must not reach it,
+    # and consent withdrawn since scoring was queued blocks publication.
+    from app.database.models import ConsentType
+    from app.services.consent import consent_permits
+
+    if not consent_permits(
+        db, str(participant_session.participant_id), ConsentType.RESEARCH_PARTICIPATION
+    ):
         logger.warning(
-            "BigQuery export skipped: no active research consent",
+            "export_session: research consent absent; export skipped",
             extra={"participant_session_id": participant_session_id},
         )
         return False
